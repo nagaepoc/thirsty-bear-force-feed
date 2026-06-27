@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Thirsty Bear Force Feed</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#2E4053;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
+canvas{display:block;width:100%;height:100%;cursor:pointer;position:relative;z-index:1}
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;transition:opacity .4s}
+#startScreen{background:linear-gradient(135deg,#1a1a2e 0,#16213e 50%,#0f3460 100%)}
+#startScreen h1{font-size:clamp(2rem,8vw,5rem);color:#FFD700;text-shadow:0 0 30px rgba(255,215,0,.5),0 4px 8px rgba(0,0,0,.5);text-align:center;margin-bottom:.3em}
+#startScreen .subtitle{font-size:clamp(1rem,3vw,1.8rem);color:#ffa07a;margin-bottom:.8em;text-align:center;font-style:italic;opacity:.9}
+#startScreen .bear-icon{font-size:clamp(4rem,15vw,8rem);margin-bottom:.3em;animation:bounce 1.2s infinite}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}
+.btn{font-size:clamp(1.2rem,4vw,2.2rem);padding:.5em 2em;border:none;border-radius:50px;cursor:pointer;font-weight:700;transition:all .2s;text-transform:uppercase;letter-spacing:2px}
+.btn-play{background:linear-gradient(135deg,#FFD700,#FFA500);color:#1a1a2e;box-shadow:0 0 30px rgba(255,215,0,.4)}
+.btn-play:hover{transform:scale(1.08);box-shadow:0 0 50px rgba(255,215,0,.6)}
+.btn-play:active{transform:scale(.95)}
+.btn-restart{background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:#fff;box-shadow:0 0 30px rgba(255,107,107,.4);margin-top:1em}
+.btn-restart:hover{transform:scale(1.08);box-shadow:0 0 50px rgba(255,107,107,.6)}
+.btn-restart:active{transform:scale(.95)}
+#gameOverScreen{background:rgba(0,0,0,.85);display:none;opacity:0}
+#gameOverScreen.show{display:flex;opacity:1}
+#gameOverScreen h1{font-size:clamp(2rem,7vw,4.5rem);color:#ff4444;text-shadow:0 0 40px rgba(255,0,0,.6),0 4px 8px rgba(0,0,0,.5);text-align:center}
+#gameOverScreen .sub{font-size:clamp(1rem,3vw,1.8rem);color:#ffa07a;margin:.5em 0 0;text-align:center}
+.stats{color:#fff;font-size:clamp(1rem,2.5vw,1.5rem);margin:1em 0;text-align:center}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="startScreen" class="overlay">
+<div class="bear-icon">🐻</div>
+<h1>Thirsty Bear<br>Force-Feed!</h1>
+<p class="subtitle">"He said stop... but did you listen?"</p>
+<button class="btn btn-play" id="playBtn">PLAY</button>
+</div>
+<div id="gameOverScreen" class="overlay">
+<h1>BEAR GOES BOOM!</h1>
+<p class="sub">The bear couldn't handle your kindness...</p>
+<div class="stats" id="finalStats"></div>
+<button class="btn btn-restart" id="restartBtn">PLAY AGAIN</button>
+</div>
+<canvas id="gameCanvas"></canvas>
+<script>
+// =====================================================================
+// THIRSTY BEAR FORCE-FEED — A Canvas PWA Game
+// =====================================================================
+
+// ===================== PWA SETUP =====================================
+(function setupPWA() {
+  // Generate icon canvases
+  function genIcon(size) {
+    const c = document.createElement('canvas');
+    c.width=size;c.height=size;
+    const x=c.getContext('2d');
+    const cx=size/2,cy=size/2,r=size*0.38;
+    // Brown circle head
+    x.beginPath();x.arc(cx,cy,r,0,Math.PI*2);
+    x.fillStyle='#8B5E3C';x.fill();
+    // Ears
+    x.beginPath();x.arc(cx-r*0.7,cy-r*0.7,r*0.3,0,Math.PI*2);
+    x.fillStyle='#6B3F1F';x.fill();
+    x.beginPath();x.arc(cx+r*0.7,cy-r*0.7,r*0.3,0,Math.PI*2);
+    x.fillStyle='#6B3F1F';x.fill();
+    // Snout
+    x.beginPath();x.arc(cx,cy+r*0.15,r*0.35,0,Math.PI*2);
+    x.fillStyle='#D4A574';x.fill();
+    // Nose
+    x.beginPath();x.arc(cx,cy+r*0.1,r*0.1,0,Math.PI*2);
+    x.fillStyle='#2C1810';x.fill();
+    // Eyes
+    x.beginPath();x.arc(cx-r*0.25,cy-r*0.2,r*0.06,0,Math.PI*2);
+    x.fillStyle='#2C1810';x.fill();
+    x.beginPath();x.arc(cx+r*0.25,cy-r*0.2,r*0.06,0,Math.PI*2);
+    x.fillStyle='#2C1810';x.fill();
+    return c.toDataURL('image/png');
+  }
+  const icon192=genIcon(192),icon512=genIcon(512);
+  // Blob manifest
+  const manifest={
+    name:'Thirsty Bear Force Feed',
+    short_name:'Bear Feed',
+    description:'Force-feed the thirsty bear until he pops!',
+    start_url:'.',
+    display:'standalone',
+    orientation:'portrait',
+    theme_color:'#FF7F50',
+    background_color:'#2E4053',
+    icons:[
+      {src:icon192,sizes:'192x192',type:'image/png'},
+      {src:icon512,sizes:'512x512',type:'image/png'}
+    ]
+  };
+  const manifestBlob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+  const manifestUrl=URL.createObjectURL(manifestBlob);
+  const link=document.createElement('link');
+  link.rel='manifest';link.href=manifestUrl;
+  document.head.appendChild(link);
+  // Service worker
+  if('serviceWorker' in navigator){
+    const pageUrl=window.location.href;
+    const swCode=`
+      const PAGE=${JSON.stringify(pageUrl)};
+      const CACHE='bear-feed-v1';
+      self.addEventListener('install',e=>{
+        self.skipWaiting();
+        e.waitUntil(caches.open(CACHE).then(c=>c.addAll([PAGE])));
+      });
+      self.addEventListener('fetch',e=>{
+        e.respondWith(
+          caches.match(e.request).then(r=>r||fetch(e.request))
+        );
+      });
+    `;
+    const swBlob=new Blob([swCode],{type:'application/javascript'});
+    const swUrl=URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swUrl,{scope:'./'}).catch(()=>{});
+  }
+})();
+
+// ===================== CANVAS SETUP ==================================
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+let W,H;
+
+function resize(){
+  W=canvas.width=window.innerWidth;
+  H=canvas.height=window.innerHeight;
+}
+
+// ===================== AUDIO ENGINE ==================================
+let audioCtx=null;
+function getAudioCtx(){
+  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+const Sound={
+  walk(){
+    try{
+      const ac=getAudioCtx();
+      const osc=ac.createOscillator();
+      const gain=ac.createGain();
+      osc.type='sine';
+      osc.frequency.setValueAtTime(80,ac.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(40,ac.currentTime+0.1);
+      gain.gain.setValueAtTime(0.15,ac.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.12);
+      osc.connect(gain);gain.connect(ac.destination);
+      osc.start();osc.stop(ac.currentTime+0.12);
+    }catch(e){}
+  },
+  slurp(){
+    try{
+      const ac=getAudioCtx();
+      const osc=ac.createOscillator();
+      const gain=ac.createGain();
+      const filter=ac.createBiquadFilter();
+      filter.type='lowpass';
+      filter.frequency.setValueAtTime(800,ac.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(200,ac.currentTime+0.3);
+      osc.type='sawtooth';
+      osc.frequency.setValueAtTime(600,ac.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(300,ac.currentTime+0.25);
+      gain.gain.setValueAtTime(0.2,ac.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.3);
+      osc.connect(filter);filter.connect(gain);gain.connect(ac.destination);
+      osc.start();osc.stop(ac.currentTime+0.3);
+    }catch(e){}
+  },
+  warning(){
+    try{
+      const ac=getAudioCtx();
+      const osc=ac.createOscillator();
+      const gain=ac.createGain();
+      osc.type='sawtooth';
+      const t=ac.currentTime;
+      osc.frequency.setValueAtTime(150,t);
+      osc.frequency.linearRampToValueAtTime(300,t+0.08);
+      osc.frequency.linearRampToValueAtTime(100,t+0.16);
+      osc.frequency.linearRampToValueAtTime(400,t+0.24);
+      osc.frequency.linearRampToValueAtTime(100,t+0.32);
+      gain.gain.setValueAtTime(0.3,t);
+      gain.gain.setValueAtTime(0.3,t+0.25);
+      gain.gain.exponentialRampToValueAtTime(0.001,t+0.4);
+      const dist=ac.createWaveShaper();
+      const k=12,cs=new Float32Array(256);
+      for(let i=0;i<256;i++){const x=(i-128)/128;cs[i]=((Math.PI+k)*x-Math.PI*x**3)/(2*Math.PI);}
+      dist.curve=cs;
+      osc.connect(dist);dist.connect(gain);gain.connect(ac.destination);
+      osc.start();osc.stop(t+0.4);
+    }catch(e){}
+  },
+  dogLaugh(){
+    try{
+      const ac=getAudioCtx();
+      const osc=ac.createOscillator();
+      const gain=ac.createGain();
+      osc.type='square';
+      const t=ac.currentTime;
+      for(let i=0;i<6;i++){
+        const note=t+i*0.12;
+        osc.frequency.setValueAtTime(i%2===0?500:600,note);
+      }
+      gain.gain.setValueAtTime(0.08,t);
+      gain.gain.setValueAtTime(0.08,t+0.6);
+      gain.gain.exponentialRampToValueAtTime(0.001,t+0.72);
+      osc.connect(gain);gain.connect(ac.destination);
+      osc.start();osc.stop(t+0.72);
+    }catch(e){}
+  },
+  burst(){
+    try{
+      const ac=getAudioCtx();
+      // White noise burst
+      const bufferSize=ac.sampleRate*0.6;
+      const buffer=ac.createBuffer(1,bufferSize,ac.sampleRate);
+      const data=buffer.getChannelData(0);
+      for(let i=0;i<bufferSize;i++) data[i]=(Math.random()*2-1)*Math.exp(-i/(ac.sampleRate*0.08));
+      const noise=ac.createBufferSource();
+      noise.buffer=buffer;
+      const noiseGain=ac.createGain();
+      noiseGain.gain.setValueAtTime(0.5,ac.currentTime);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.5);
+      noise.connect(noiseGain);noiseGain.connect(ac.destination);
+      noise.start();noise.stop(ac.currentTime+0.6);
+      // Descending splat
+      const osc=ac.createOscillator();
+      const gain=ac.createGain();
+      osc.type='sine';
+      osc.frequency.setValueAtTime(400,ac.currentTime+0.1);
+      osc.frequency.exponentialRampToValueAtTime(50,ac.currentTime+0.6);
+      gain.gain.setValueAtTime(0.3,ac.currentTime+0.1);
+      gain.gain.linearRampToValueAtTime(0.2,ac.currentTime+0.3);
+      gain.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.7);
+      osc.connect(gain);gain.connect(ac.destination);
+      osc.start(ac.currentTime+0.1);osc.stop(ac.currentTime+0.7);
+    }catch(e){}
+  }
+};
+
+// ===================== GAME STATE ====================================
+const State={
+  START:'start',
+  WALKING:'walking',
+  THIRSTY:'thirsty',
+  DRINKING:'drinking',
+  WARNING:'warning',
+  BURST:'burst',
+  GAME_OVER:'game_over'
+};
+
+let game={
+  state:State.START,
+  drinkCount:0,
+  maxSafeDrinks:10,
+  baseRadius:35,
+  bearX:-200,
+  bearY:0,
+  targetX:0,
+  walkProgress:0,
+  isWalking:true,
+  tongueOut:false,
+  sweatDrops:[],
+  bellyScale:1,
+  targetBellyScale:1,
+  headTilt:0,
+  bottleAngle:0,
+  bottleSquash:1,
+  screenShake:{x:0,y:0,intensity:0},
+  shakeTime:0,
+  warningBubbleAlpha:0,
+  burstTimer:0,
+  burstParticles:[],
+  plusOnes:[],
+  streamProgress:0,
+  isStreaming:false,
+  streamTimer:0,
+  dogRollPhase:0,
+  dogBubbleText:'LOL',
+  dogBubbleTimer:0,
+  dogLaughTimer:0,
+  dogScale:1,
+  dogTargetScale:1,
+  walkTimer:0,
+  introBubble:'',
+  introBubbleAlpha:0,
+  introStage:0, // 0=walking,1=thirsty text,2=show prompt
+  showPrompt:false,
+  promptAlpha:0,
+  canDrink:false,
+  gameTime:0,
+  bearDead:false,
+  bearBodyAngle:0,
+  bearRagdollY:0,
+  shakeAmount:0,
+  stopBubble:{
+    show:false,
+    scale:0,
+    shakeX:0,
+    shakeY:0
+  },
+  bottleShake:0,
+  burpTimer:0,
+  drinkAnimTimer:0,
+  boomText:{show:false,scale:0,alpha:1},
+  dogShake:0
+};
+
+// ===================== COORDINATE HELPERS ============================
+function groundY(){return H*0.78}
+function bearCenterX(){return W*0.62}
+function bearCenterY(){return groundY()-H*0.18}
+function dogCenterX(){return W*0.15}
+function dogCenterY(){return groundY()-H*0.06}
+function bottleCenterX(){return W*0.5}
+function bottleCenterY(){return groundY()-H*0.04}
+
+// ===================== DRAWING FUNCTIONS =============================
+
+// ----- Background -----
+function drawBackground(){
+  // Sky gradient
+  const sky=ctx.createLinearGradient(0,0,0,groundY());
+  sky.addColorStop(0,'#4FC3F7');
+  sky.addColorStop(0.5,'#81D4FA');
+  sky.addColorStop(1,'#B3E5FC');
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,groundY());
+  // Sun
+  const sunX=W*0.85,sunY=H*0.1,sunR=Math.min(W,H)*0.06;
+  const sunGrad=ctx.createRadialGradient(sunX,sunY,0,sunX,sunY,sunR*2);
+  sunGrad.addColorStop(0,'rgba(255,255,0,0.4)');
+  sunGrad.addColorStop(0.5,'rgba(255,200,0,0.15)');
+  sunGrad.addColorStop(1,'rgba(255,200,0,0)');
+  ctx.fillStyle=sunGrad;ctx.beginPath();ctx.arc(sunX,sunY,sunR*2,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#FFD700';ctx.beginPath();ctx.arc(sunX,sunY,sunR,0,Math.PI*2);ctx.fill();
+  // Sun face
+  ctx.fillStyle='#FFA000';
+  ctx.beginPath();ctx.arc(sunX-sunR*0.25,sunY-sunR*0.15,sunR*0.08,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(sunX+sunR*0.25,sunY-sunR*0.15,sunR*0.08,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#FFA000';ctx.lineWidth=sunR*0.08;
+  ctx.beginPath();ctx.arc(sunX,sunY+sunR*0.1,sunR*0.3,0.1,Math.PI-0.1);ctx.stroke();
+  // Clouds
+  const cloudTime=game.gameTime*0.02;
+  drawCloud(W*0.1+cloudTime%W,W*0.12,Math.min(W,H)*0.04);
+  drawCloud(W*0.35+(cloudTime*0.7)%W,W*0.08,Math.min(W,H)*0.035);
+  drawCloud(W*0.6+(cloudTime*0.5)%W,W*0.15,Math.min(W,H)*0.05);
+  drawCloud(W*0.8+(cloudTime*0.3)%W,W*0.07,Math.min(W,H)*0.03);
+  // Grass
+  ctx.fillStyle='#66BB6A';
+  ctx.fillRect(0,groundY()-H*0.02,W,H*0.02);
+  // Road
+  ctx.fillStyle='#616161';
+  ctx.fillRect(0,groundY(),W,H*0.08);
+  // Road dashed line
+  ctx.strokeStyle='#FFF';
+  ctx.lineWidth=H*0.006;
+  ctx.setLineDash([H*0.03,H*0.02]);
+  ctx.beginPath();ctx.moveTo(0,groundY()+H*0.04);ctx.lineTo(W,groundY()+H*0.04);ctx.stroke();
+  ctx.setLineDash([]);
+  // Sidewalk
+  ctx.fillStyle='#9E9E9E';
+  ctx.fillRect(0,groundY()-H*0.02,W,H*0.02);
+  // Sidewalk lines
+  ctx.strokeStyle='#BDBDBD';
+  ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){
+    ctx.beginPath();ctx.moveTo(x,groundY()-H*0.02);ctx.lineTo(x,groundY());ctx.stroke();
+  }
+}
+
+function drawCloud(x,y,r){
+  ctx.fillStyle='rgba(255,255,255,0.8)';
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(x+r*0.8,y-r*0.1,r*0.8,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(x+r*1.5,y,r*0.7,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(x+r*0.7,y+r*0.3,r*0.6,0,Math.PI*2);ctx.fill();
+}
+
+// ----- Bottle -----
+function drawBottle(){
+  const bx=bottleCenterX(),by=bottleCenterY();
+  const bw=Math.min(W,H)*0.04,bh=Math.min(W,H)*0.08;
+  // Pulsing glow
+  const glowPulse=0.5+0.5*Math.sin(game.gameTime*0.003);
+  const glowGrad=ctx.createRadialGradient(bx,by-bh*0.3,0,bx,by-bh*0.3,bh*1.5);
+  glowGrad.addColorStop(0,`rgba(255,200,50,${0.2+0.15*glowPulse})`);
+  glowGrad.addColorStop(0.5,`rgba(255,200,50,${0.08*glowPulse})`);
+  glowGrad.addColorStop(1,'rgba(255,200,50,0)');
+  ctx.fillStyle=glowGrad;ctx.beginPath();ctx.arc(bx,by-bh*0.3,bh*1.5,0,Math.PI*2);ctx.fill();
+  // Bottle body
+  ctx.save();
+  ctx.translate(bx,by);
+  if(game.bottleShake>0){
+    ctx.translate((Math.random()-0.5)*game.bottleShake,(Math.random()-0.5)*game.bottleShake);
+  }
+  ctx.rotate(game.bottleAngle);
+  ctx.scale(1,game.bottleSquash);
+  // Bottle cap
+  ctx.fillStyle='#C62828';ctx.strokeStyle='#8E0000';ctx.lineWidth=2;
+  roundRect(ctx,-bw*0.35,-bh*0.85,bw*0.7,bh*0.12,3);ctx.fill();ctx.stroke();
+  // Bottle neck
+  ctx.fillStyle='#FF8A80';ctx.strokeStyle='#D50000';ctx.lineWidth=1.5;
+  roundRect(ctx,-bw*0.25,-bh*0.7,bw*0.5,bh*0.15,2);ctx.fill();ctx.stroke();
+  // Bottle body
+  ctx.fillStyle='#FF5252';ctx.strokeStyle='#D50000';ctx.lineWidth=1.5;
+  roundRect(ctx,-bw*0.5,-bh*0.55,bw,bh*0.5,5);ctx.fill();ctx.stroke();
+  // Label
+  ctx.fillStyle='#FFF';
+  roundRect(ctx,-bw*0.35,-bh*0.35,bw*0.7,bh*0.18,2);
+  ctx.fill();
+  ctx.fillStyle='#D32F2F';ctx.font=`bold ${bw*0.3}px sans-serif`;ctx.textAlign='center';
+  ctx.fillText('H2O',0,-bh*0.25);
+  // Highlight
+  ctx.fillStyle='rgba(255,255,255,0.3)';
+  roundRect(ctx,-bw*0.35,-bh*0.5,bw*0.15,bh*0.35,3);
+  ctx.fill();
+  ctx.restore();
+}
+
+// ----- Bear -----
+function drawBear(){
+  const alpha = game.state===State.GAME_OVER ? Math.max(0, 1 - game.burstTimer/60) : 1;
+  ctx.save();
+  ctx.globalAlpha = game.state===State.GAME_OVER ? alpha : 1;
+
+  const bx=game.bearX;
+  const by=game.bearY;
+
+  ctx.translate(bx,by);
+
+  // Warning red tint
+  if(game.state===State.WARNING){
+    ctx.save();
+    ctx.globalAlpha=0.15+0.1*Math.sin(game.gameTime*0.01);
+    ctx.fillStyle='#FF0000';
+    ctx.beginPath();ctx.arc(0,0,game.baseRadius+game.drinkCount*8+20,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  // Burst ragdoll
+  if(game.state===State.BURST||game.state===State.GAME_OVER){
+    ctx.rotate(game.bearBodyAngle);
+  }
+
+  const bellyR=game.baseRadius+game.drinkCount*8;
+  const scale=game.bellyScale;
+
+  // Walking bob
+  let bobY=0;
+  if(game.state===State.WALKING&&!game.bearDead){
+    bobY=Math.sin(game.walkTimer*0.15)*4;
+  }
+
+  ctx.translate(0,bobY);
+
+  // Body (belly)
+  const bellyGrad=ctx.createRadialGradient(-bellyR*0.2,-bellyR*0.3,0,0,0,bellyR*scale);
+  bellyGrad.addColorStop(0,'#C4956A');
+  bellyGrad.addColorStop(0.7,'#8B5E3C');
+  bellyGrad.addColorStop(1,'#6B3F1F');
+  ctx.fillStyle=bellyGrad;
+  ctx.beginPath();ctx.arc(0,bellyR*0.2,bellyR*scale,0,Math.PI*2);ctx.fill();
+
+  // Belly outline
+  ctx.strokeStyle='#5A3520';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(0,bellyR*0.2,bellyR*scale,0,Math.PI*2);ctx.stroke();
+
+  // Darker belly center
+  ctx.fillStyle='#D4A574';
+  ctx.beginPath();ctx.ellipse(0,bellyR*0.4,bellyR*0.5*scale,bellyR*0.4*scale,0,0,Math.PI*2);ctx.fill();
+
+  // Nipple dots
+  ctx.fillStyle='#5A3520';
+  ctx.beginPath();ctx.arc(-bellyR*0.2*scale,bellyR*0.15,3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(bellyR*0.2*scale,bellyR*0.15,3,0,Math.PI*2);ctx.fill();
+
+  // Legs
+  const legH=bellyR*0.5;
+  // Left leg
+  ctx.fillStyle='#7A4E2D';
+  roundRect(ctx,-bellyR*0.5*scale,bellyR*0.5,bellyR*0.3,legH,6);ctx.fill();
+  // Right leg
+  roundRect(ctx,bellyR*0.2*scale,bellyR*0.5,bellyR*0.3,legH,6);ctx.fill();
+  // Feet
+  ctx.fillStyle='#5A3520';
+  ctx.beginPath();ctx.ellipse(-bellyR*0.35*scale,bellyR*0.5+legH,bellyR*0.2,bellyR*0.12,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(bellyR*0.35*scale,bellyR*0.5+legH,bellyR*0.2,bellyR*0.12,0,0,Math.PI*2);ctx.fill();
+
+  // Arms
+  if(game.state!==State.BURST&&game.state!==State.GAME_OVER){
+    const armSwing = game.state===State.WALKING ? Math.sin(game.walkTimer*0.15)*0.2 : 0;
+    ctx.fillStyle='#7A4E2D';
+    ctx.save();
+    ctx.translate(-bellyR*0.8*scale,bellyR*0.1);
+    ctx.rotate(-0.3+armSwing);
+    roundRect(ctx,-5,0,10,bellyR*0.45,5);ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(bellyR*0.8*scale,bellyR*0.1);
+    ctx.rotate(0.3-armSwing);
+    roundRect(ctx,-5,0,10,bellyR*0.45,5);ctx.fill();
+    ctx.restore();
+  }
+
+  // Head
+  const headY=-bellyR*0.7*scale;
+  const headR=bellyR*0.55;
+
+  // Head tilt
+  ctx.save();
+  ctx.translate(0,headY);
+  ctx.rotate(game.headTilt);
+
+  // Ears
+  ctx.fillStyle='#6B3F1F';
+  ctx.beginPath();ctx.arc(-headR*0.7,-headR*0.75,headR*0.3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(headR*0.7,-headR*0.75,headR*0.3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#D4A574';
+  ctx.beginPath();ctx.arc(-headR*0.7,-headR*0.75,headR*0.15,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(headR*0.7,-headR*0.75,headR*0.15,0,Math.PI*2);ctx.fill();
+
+  // Head
+  const headGrad=ctx.createRadialGradient(-headR*0.2,-headR*0.3,0,0,0,headR);
+  headGrad.addColorStop(0,'#C4956A');
+  headGrad.addColorStop(1,'#8B5E3C');
+  ctx.fillStyle=headGrad;
+  ctx.beginPath();ctx.arc(0,0,headR,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#5A3520';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(0,0,headR,0,Math.PI*2);ctx.stroke();
+
+  // Snout
+  ctx.fillStyle='#D4A574';
+  ctx.beginPath();ctx.ellipse(0,headR*0.2,headR*0.4,headR*0.3,0,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#5A3520';ctx.lineWidth=1;
+  ctx.beginPath();ctx.ellipse(0,headR*0.2,headR*0.4,headR*0.3,0,0,Math.PI*2);ctx.stroke();
+
+  // Nose
+  ctx.fillStyle='#2C1810';
+  ctx.beginPath();ctx.ellipse(0,headR*0.15,headR*0.12,headR*0.08,0,0,Math.PI*2);ctx.fill();
+
+  // Mouth
+  if((game.tongueOut||game.drinkCount>7)&&game.state!==State.DRINKING&&game.state!==State.BURST){
+    // Tongue out
+    ctx.fillStyle='#D32F2F';
+    ctx.beginPath();ctx.ellipse(0,headR*0.4,headR*0.15,headR*0.2,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#E57373';
+    ctx.beginPath();ctx.ellipse(0,headR*0.42,headR*0.08,headR*0.12,0,0,Math.PI*2);ctx.fill();
+  }else{
+    // Normal mouth
+    ctx.strokeStyle='#2C1810';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(0,headR*0.3,headR*0.15,0.1,Math.PI-0.1);ctx.stroke();
+  }
+
+  // Eyes - different expressions
+  if(game.state===State.BURST||game.state===State.GAME_OVER){
+    // X_X eyes
+    ctx.strokeStyle='#2C1810';ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(-headR*0.3,-headR*0.15);ctx.lineTo(-headR*0.1,-headR*0.35);ctx.moveTo(-headR*0.1,-headR*0.15);ctx.lineTo(-headR*0.3,-headR*0.35);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(headR*0.1,-headR*0.15);ctx.lineTo(headR*0.3,-headR*0.35);ctx.moveTo(headR*0.3,-headR*0.15);ctx.lineTo(headR*0.1,-headR*0.35);ctx.stroke();
+  }else if(game.drinkCount>7){
+    // Scared eyes
+    ctx.fillStyle='#FFF';
+    ctx.beginPath();ctx.ellipse(-headR*0.25,-headR*0.1,headR*0.18,headR*0.2,0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(headR*0.25,-headR*0.1,headR*0.18,headR*0.2,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#2C1810';
+    ctx.beginPath();ctx.arc(-headR*0.25,-headR*0.05,headR*0.08,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(headR*0.25,-headR*0.05,headR*0.08,0,Math.PI*2);ctx.fill();
+    // Eyebrows
+    ctx.strokeStyle='#2C1810';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(-headR*0.4,-headR*0.35);ctx.lineTo(-headR*0.1,-headR*0.25);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(headR*0.4,-headR*0.35);ctx.lineTo(headR*0.1,-headR*0.25);ctx.stroke();
+  }else if(game.drinkCount>4){
+    // Happy eyes
+    ctx.strokeStyle='#2C1810';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(-headR*0.22,-headR*0.15,headR*0.08,0,Math.PI);ctx.stroke();
+    ctx.beginPath();ctx.arc(headR*0.22,-headR*0.15,headR*0.08,0,Math.PI);ctx.stroke();
+  }else{
+    // Normal cute eyes
+    ctx.fillStyle='#2C1810';
+    ctx.beginPath();ctx.arc(-headR*0.22,-headR*0.15,headR*0.07,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(headR*0.22,-headR*0.15,headR*0.07,0,Math.PI*2);ctx.fill();
+    // Eye shine
+    ctx.fillStyle='#FFF';
+    ctx.beginPath();ctx.arc(-headR*0.19,-headR*0.18,headR*0.025,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(headR*0.29,-headR*0.18,headR*0.025,0,Math.PI*2);ctx.fill();
+  }
+
+  ctx.restore(); // head tilt
+  ctx.restore(); // global transform
+
+  // Sweat drops
+  if(game.tongueOut||game.drinkCount>7){
+    for(const d of game.sweatDrops){
+      ctx.fillStyle='rgba(100,180,255,0.7)';
+      ctx.beginPath();
+      ctx.ellipse(bx+d.x,by+headY+d.y,d.w,d.h,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.4)';
+      ctx.beginPath();
+      ctx.ellipse(bx+d.x-d.w*0.2,by+headY+d.y-d.h*0.2,d.w*0.3,d.h*0.3,0,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  ctx.restore(); // alpha
+}
+
+// ----- Dog -----
+function drawDog(){
+  const dx=dogCenterX(),dy=dogCenterY();
+  const s=Math.min(W,H)*0.04;
+  const rollPhase=game.dogRollPhase;
+
+  ctx.save();
+  ctx.translate(dx,dy);
+  // Dog shake when laughing hard
+  if(game.dogShake>0.5){
+    ctx.translate((Math.random()-0.5)*game.dogShake,(Math.random()-0.5)*game.dogShake);
+  }
+  ctx.scale(game.dogScale,game.dogScale);
+
+  // Body rolling - rotate around center
+  ctx.rotate(Math.sin(rollPhase)*0.6);
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.beginPath();ctx.ellipse(0,s*2.5,s*1.8,s*0.5,0,0,Math.PI*2);ctx.fill();
+
+  // Tail (wagging with roll)
+  ctx.strokeStyle='#8B6F47';ctx.lineWidth=s*0.2;
+  ctx.beginPath();ctx.moveTo(-s*1.2,0);
+  const tailWag=Math.sin(rollPhase*2)*0.3;
+  ctx.quadraticCurveTo(-s*1.8,-s*0.5-tailWag*s,-s*2.2,-s*0.3-tailWag*s*0.5);
+  ctx.stroke();
+
+  // Body
+  ctx.fillStyle='#C4956A';
+  ctx.beginPath();ctx.ellipse(0,0,s*1.4,s*0.7,0,0,Math.PI*2);ctx.fill();
+
+  // Belly
+  ctx.fillStyle='#D4A574';
+  ctx.beginPath();ctx.ellipse(0,s*0.15,s*1.0,s*0.45,0,0,Math.PI*2);ctx.fill();
+
+  // Legs (kicking)
+  const kickPhase=Math.sin(rollPhase*2);
+  ctx.strokeStyle='#A67B5B';ctx.lineWidth=s*0.25;
+  // Front legs
+  ctx.beginPath();ctx.moveTo(s*0.8,s*0.2);
+  ctx.lineTo(s*1.2+kickPhase*s*0.3,s*0.6-kickPhase*s*0.4);
+  ctx.stroke();
+  ctx.beginPath();ctx.moveTo(s*0.6,s*0.2);
+  ctx.lineTo(s*0.8-kickPhase*s*0.3,s*0.7+kickPhase*s*0.3);
+  ctx.stroke();
+  // Back legs
+  ctx.beginPath();ctx.moveTo(-s*0.8,s*0.2);
+  ctx.lineTo(-s*1.2+Math.cos(rollPhase*2)*s*0.3,-s*0.1+kickPhase*s*0.5);
+  ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-s*0.6,s*0.2);
+  ctx.lineTo(-s*0.8-Math.cos(rollPhase*2)*s*0.3,s*0.1-kickPhase*s*0.3);
+  ctx.stroke();
+  // Paw pads
+  ctx.fillStyle='#8B6F47';
+  ctx.beginPath();ctx.arc(s*1.2+kickPhase*s*0.3,s*0.6-kickPhase*s*0.4,s*0.08,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(-s*1.2+Math.cos(rollPhase*2)*s*0.3,-s*0.1+kickPhase*s*0.5,s*0.08,0,Math.PI*2);ctx.fill();
+
+  // Head
+  ctx.fillStyle='#C4956A';
+  ctx.beginPath();ctx.ellipse(s*1.1,-s*0.2,s*0.5,s*0.4,0,0,Math.PI*2);ctx.fill();
+
+  // Ear (floppy)
+  ctx.fillStyle='#A67B5B';
+  ctx.beginPath();ctx.ellipse(s*1.3,-s*0.5,s*0.15,s*0.35,0.3,0,Math.PI*2);ctx.fill();
+
+  // Snout
+  ctx.fillStyle='#D4A574';
+  ctx.beginPath();ctx.ellipse(s*1.35,-s*0.15,s*0.25,s*0.18,0,0,Math.PI*2);ctx.fill();
+
+  // Nose
+  ctx.fillStyle='#2C1810';
+  ctx.beginPath();ctx.arc(s*1.45,-s*0.15,s*0.07,0,Math.PI*2);ctx.fill();
+
+  // Eye
+  ctx.fillStyle='#2C1810';
+  ctx.beginPath();ctx.arc(s*1.15,-s*0.28,s*0.06,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#FFF';
+  ctx.beginPath();ctx.arc(s*1.17,-s*0.3,s*0.025,0,Math.PI*2);ctx.fill();
+
+  // Tongue (hanging out, laughing)
+  ctx.fillStyle='#D32F2F';
+  ctx.beginPath();ctx.ellipse(s*1.4,-s*0.05,s*0.08,s*0.15,0.2,0,Math.PI*2);ctx.fill();
+
+  ctx.restore();
+
+  // Speech bubble - alternates in sync with roll (faster during game over)
+  const bubbleTexts=['LOL','ROFL','HAHAHA','LMAO','DEAD'];
+  const speed=game.state===State.GAME_OVER?0.05:0.018;
+  const bubbleIdx=Math.floor(game.gameTime*speed)%bubbleTexts.length;
+  drawBubble(dx,dy-s*2.5,bubbleTexts[bubbleIdx],s*0.6,'#FFF','#333','rgba(0,0,0,0.1)');
+}
+
+// ----- Speech Bubbles -----
+function drawBubble(x,y,text,size,bg,fg,shadow){
+  const pad=size*0.3;
+  const w=ctx.measureText?ctx.measureText(text).width+pad*2:size*4;
+  const h=size*1.6;
+  const r=size*0.3;
+  // Shadow
+  if(shadow){
+    ctx.fillStyle=shadow;
+    roundRect(ctx,x-w/2+3,y-h+3,w,h,r);ctx.fill();
+  }
+  // Bubble
+  ctx.fillStyle=bg;
+  ctx.strokeStyle=fg;
+  ctx.lineWidth=1.5;
+  roundRect(ctx,x-w/2,y-h,w,h,r);ctx.fill();ctx.stroke();
+  // Tail
+  ctx.fillStyle=bg;
+  ctx.beginPath();ctx.moveTo(x-size*0.4,y-2);ctx.lineTo(x,y+size*0.2);ctx.lineTo(x+size*0.4,y-2);ctx.fill();
+  ctx.strokeStyle=fg;
+  ctx.beginPath();ctx.moveTo(x-size*0.4,y-2);ctx.lineTo(x,y+size*0.2);ctx.lineTo(x+size*0.4,y-2);ctx.stroke();
+  // Text
+  ctx.fillStyle=fg;
+  ctx.font=`bold ${size}px sans-serif`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(text,x,y-h/2);
+}
+
+function drawIntroBubble(){
+  if(!game.introBubble||game.introBubbleAlpha<=0) return;
+  const bx=game.bearX,by=game.bearY-H*0.15;
+  ctx.globalAlpha=game.introBubbleAlpha;
+  drawBubble(bx,by,game.introBubble,Math.min(W,H)*0.025,'#FFF','#333','rgba(0,0,0,0.15)');
+  ctx.globalAlpha=1;
+}
+
+function drawStopBubble(){
+  if(!game.stopBubble.show) return;
+  const bx=game.bearX,by=game.bearY-H*0.3;
+  const s=game.stopBubble.scale;
+  const shakeX=game.stopBubble.shakeX;
+  const shakeY=game.stopBubble.shakeY;
+
+  ctx.save();
+  ctx.translate(bx+shakeX,by+shakeY);
+  ctx.scale(s,s);
+
+  const r=Math.min(W,H)*0.08;
+  const w=r*2.5;
+  // Comic bubble
+  ctx.fillStyle='#FFD700';
+  ctx.strokeStyle='#D32F2F';ctx.lineWidth=4;
+  roundRect(ctx,-w/2,-r,w,r*1.6,r*0.3);ctx.fill();ctx.stroke();
+
+  // Double border
+  ctx.strokeStyle='#FF8A80';ctx.lineWidth=2;
+  roundRect(ctx,-w/2+4,-r+4,w-8,r*1.6-8,r*0.25);ctx.stroke();
+
+  // Tail
+  ctx.fillStyle='#FFD700';ctx.strokeStyle='#D32F2F';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(0,r*0.7);ctx.lineTo(-r*0.3,r*1.2);ctx.lineTo(r*0.3,r*1.2);ctx.closePath();ctx.fill();ctx.stroke();
+
+  // Text
+  ctx.fillStyle='#D32F2F';
+  ctx.font=`bold ${r*0.7}px sans-serif`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('STOP!!',0,0);
+  // Outline on text
+  ctx.strokeStyle='#FFF';ctx.lineWidth=2;
+  ctx.strokeText('STOP!!',0,0);
+
+  ctx.restore();
+}
+
+function drawPrompt(){
+  if(!game.showPrompt) return;
+  const bx=game.bearX,by=bottleCenterY()-H*0.12;
+  ctx.globalAlpha=game.promptAlpha;
+  const s=Math.min(W,H)*0.022;
+  const text='Click the bottle to force-feed!';
+  drawBubble(bx,by,text,s,'rgba(255,255,255,0.9)','#FF6F00','rgba(0,0,0,0.1)');
+  ctx.globalAlpha=1;
+
+  // Arrow pointing down to bottle
+  ctx.fillStyle=`rgba(255,100,50,${0.5+0.5*Math.sin(game.gameTime*0.005)})`;
+  ctx.beginPath();
+  const ax=bx,ay=by+H*0.03;
+  ctx.moveTo(ax,ay+H*0.04);
+  ctx.lineTo(ax-H*0.015,ay);
+  ctx.lineTo(ax+H*0.015,ay);
+  ctx.fill();
+}
+
+// ----- Particles -----
+function updateParticles(){
+  for(let i=game.burstParticles.length-1;i>=0;i--){
+    const p=game.burstParticles[i];
+    p.x+=p.vx;p.y+=p.vy;
+    p.vy+=0.3;
+    p.life-=p.decay;
+    p.rot+=p.rotV;
+    if(p.life<=0){game.burstParticles.splice(i,1);continue;}
+  }
+}
+
+function drawParticles(){
+  for(const p of game.burstParticles){
+    ctx.save();
+    ctx.translate(p.x,p.y);
+    ctx.rotate(p.rot);
+    ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.color;
+    if(p.type==='fur'){
+      ctx.beginPath();ctx.ellipse(0,0,p.w,p.h,p.rot,0,Math.PI*2);ctx.fill();
+    }else{
+      ctx.beginPath();ctx.arc(0,0,p.w,0,Math.PI*2);ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function spawnBurstParticles(){
+  const cx=game.bearX,cy=game.bearY;
+  const colors=['#8B5E3C','#C4956A','#D4A574','#6B3F1F','#FF5252','#FF8A80','#FFD700','#4CAF50'];
+  for(let i=0;i<80;i++){
+    const angle=Math.random()*Math.PI*2;
+    const speed=3+Math.random()*8;
+    game.burstParticles.push({
+      x:cx+(Math.random()-0.5)*60,
+      y:cy+(Math.random()-0.5)*60,
+      vx:Math.cos(angle)*speed,
+      vy:Math.sin(angle)*speed-3,
+      w:4+Math.random()*10,
+      h:4+Math.random()*8,
+      color:colors[Math.floor(Math.random()*colors.length)],
+      life:1,
+      decay:0.008+Math.random()*0.012,
+      rot:Math.random()*Math.PI*2,
+      rotV:(Math.random()-0.5)*0.3,
+      type:Math.random()>0.4?'fur':'juice'
+    });
+  }
+}
+
+// ----- +1 Floating Text -----
+function spawnPlusOne(){
+  const bx=game.bearX,by=game.bearY-H*0.1;
+  game.plusOnes.push({
+    x:bx+(Math.random()-0.5)*40,
+    y:by,
+    vy:-1.5-Math.random()*0.5,
+    life:1,
+    text:'+1'
+  });
+}
+
+function updatePlusOnes(){
+  for(let i=game.plusOnes.length-1;i>=0;i--){
+    const p=game.plusOnes[i];
+    p.y+=p.vy;
+    p.life-=0.02;
+    if(p.life<=0){game.plusOnes.splice(i,1);}
+  }
+}
+
+function drawPlusOnes(){
+  for(const p of game.plusOnes){
+    ctx.save();
+    ctx.globalAlpha=p.life;
+    ctx.fillStyle='#FFD700';
+    ctx.font=`bold ${Math.min(W,H)*0.035}px sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.shadowColor='rgba(0,0,0,0.5)';ctx.shadowBlur=4;
+    ctx.fillText(p.text,p.x,p.y);
+    ctx.restore();
+  }
+}
+
+// ----- Drink Stream -----
+function drawStream(){
+  if(!game.isStreaming) return;
+  const startX=bottleCenterX(),startY=bottleCenterY()-H*0.04;
+  const endX=game.bearX,endY=game.bearY-H*0.35;
+  const progress=game.streamProgress;
+
+  ctx.save();
+  ctx.globalAlpha=1-progress*0.3;
+
+  // Water stream
+  const steps=20;
+  for(let i=0;i<steps;i++){
+    const t=i/steps;
+    const dist=t*progress;
+    const x=startX+(endX-startX)*dist;
+    const y=startY+(endY-startY)*dist;
+    const wobble=Math.sin(t*20+game.gameTime*0.05)*3;
+    const r=4*(1-dist*0.3);
+    ctx.fillStyle=`rgba(100,180,255,${0.6*(1-dist)})`;
+    ctx.beginPath();ctx.arc(x+wobble,y,r,0,Math.PI*2);ctx.fill();
+  }
+  // Splash at bear's mouth
+  if(progress>0.8){
+    const splash=Math.sin(game.gameTime*0.05)*3;
+    ctx.fillStyle=`rgba(100,180,255,${0.4*(1-(progress-0.8)/0.2)})`;
+    ctx.beginPath();ctx.arc(endX+Math.random()*6-3,endY+Math.random()*6-3,3+splash,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(endX+Math.random()*6-3,endY+Math.random()*6-3,2,0,Math.PI*2);ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ----- BOOM! Text -----
+function drawBoomText(){
+  if(!game.boomText.show||game.boomText.alpha<=0) return;
+  ctx.save();
+  ctx.globalAlpha=game.boomText.alpha;
+  const cx=game.bearX,cy=game.bearY-H*0.2;
+  ctx.translate(cx,cy);
+  const s=game.boomText.scale;
+  ctx.scale(s,s);
+  // Shockwave circle
+  const swRadius=Math.min(W,H)*0.15;
+  ctx.strokeStyle=`rgba(255,200,50,${0.3*game.boomText.alpha})`;
+  ctx.lineWidth=4;
+  ctx.beginPath();ctx.arc(0,0,swRadius,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle=`rgba(255,100,50,${0.15*game.boomText.alpha})`;
+  ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(0,0,swRadius*1.3,0,Math.PI*2);ctx.stroke();
+  // Text shadow
+  ctx.fillStyle='rgba(0,0,0,0.5)';
+  ctx.font=`bold ${Math.min(W,H)*0.2}px sans-serif`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('BOOM!',5,5);
+  // Main text
+  ctx.fillStyle='#FFD700';
+  ctx.strokeStyle='#D32F2F';
+  ctx.lineWidth=6;
+  ctx.strokeText('BOOM!',0,0);
+  ctx.fillText('BOOM!',0,0);
+  // Small secondary text
+  ctx.font=`bold ${Math.min(W,H)*0.06}px sans-serif`;
+  ctx.fillStyle='#FFF';
+  ctx.strokeStyle='#333';
+  ctx.lineWidth=3;
+  const subText="That's gonna leave a mark!";
+  ctx.strokeText(subText,0,Math.min(W,H)*0.12);
+  ctx.fillText(subText,0,Math.min(W,H)*0.12);
+  ctx.restore();
+}
+
+// ===================== UTILITY =======================================
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+// ===================== GAME LOGIC ====================================
+function resetGame(){
+  game={
+    state:State.START,
+    drinkCount:0,
+    maxSafeDrinks:10,
+    baseRadius:35,
+    bearX:-200,
+    bearY:0,
+    targetX:0,
+    walkProgress:0,
+    isWalking:true,
+    tongueOut:false,
+    sweatDrops:[],
+    bellyScale:1,
+    targetBellyScale:1,
+    headTilt:0,
+    bottleAngle:0,
+    bottleSquash:1,
+    screenShake:{x:0,y:0,intensity:0},
+    shakeTime:0,
+    warningBubbleAlpha:0,
+    burstTimer:0,
+    burstParticles:[],
+    plusOnes:[],
+    streamProgress:0,
+    isStreaming:false,
+    streamTimer:0,
+    dogRollPhase:0,
+    dogBubbleText:'LOL',
+    dogBubbleTimer:0,
+    dogLaughTimer:0,
+    dogScale:1,
+    dogTargetScale:1,
+    walkTimer:0,
+    introBubble:'',
+    introBubbleAlpha:0,
+    introStage:0,
+    showPrompt:false,
+    promptAlpha:0,
+    canDrink:false,
+    gameTime:0,
+    bearDead:false,
+    bearBodyAngle:0,
+    bearRagdollY:0,
+    shakeAmount:0,
+    stopBubble:{show:false,scale:0,shakeX:0,shakeY:0},
+    bottleShake:0,
+    burpTimer:0,
+    drinkAnimTimer:0,
+    boomText:{show:false,scale:0,alpha:1},
+    dogShake:0
+  };
+  game.bearY=bearCenterY();
+  game.targetX=bearCenterX();
+}
+
+function startGame(){
+  resetGame();
+  game.state=State.WALKING;
+  game.bearX=-Math.min(W*0.25,150);
+  game.bearY=bearCenterY();
+  game.targetX=bearCenterX();
+  game.isWalking=true;
+  game.introStage=0;
+  document.getElementById('startScreen').style.display='none';
+  document.getElementById('gameOverScreen').classList.remove('show');
+  document.getElementById('gameOverScreen').style.display='none';
+}
+
+function doDrink(){
+  if(!game.canDrink||game.state===State.BURST||game.state===State.GAME_OVER) return;
+  game.drinkCount++;
+  Sound.slurp();
+  // Enter DRINKING state for gulp animation
+  game.state=State.DRINKING;
+  game.drinkAnimTimer=24;
+  // Stream animation
+  game.isStreaming=true;
+  game.streamProgress=0;
+  // Belly bounce
+  game.targetBellyScale=1.3;
+  // Head tilt (gulp)
+  game.headTilt=-0.2;
+  // Bottle animation
+  game.bottleAngle=0.25;
+  game.bottleSquash=0.65;
+  // +1
+  spawnPlusOne();
+  // Burp timer
+  game.burpTimer=15;
+  // Check warning
+  if(game.drinkCount>7&&game.drinkCount<10){
+    game.stopBubble.show=true;
+    game.stopBubble.scale=0.01;
+    Sound.warning();
+  }
+  // Check burst
+  if(game.drinkCount>=game.maxSafeDrinks){
+    triggerBurst();
+  }
+}
+
+function triggerBurst(){
+  game.state=State.BURST;
+  game.bearDead=true;
+  game.burstTimer=0;
+  game.stopBubble.show=false;
+  game.boomText={show:true,scale:0.01,alpha:1};
+  // Rapid belly expansion
+  game.targetBellyScale=2.5;
+  Sound.burst();
+  spawnBurstParticles();
+  // Flash
+  document.body.style.backgroundColor='#FF0000';
+  setTimeout(()=>document.body.style.backgroundColor='',100);
+}
+
+function endGame(){
+  game.state=State.GAME_OVER;
+  const gos=document.getElementById('gameOverScreen');
+  document.getElementById('finalStats').textContent=`Total drinks: ${game.drinkCount} 🧃 | The bear went BOOM!`;
+  gos.style.display='flex';
+  gos.classList.add('show');
+}
+
+// ===================== UPDATE ========================================
+function update(){
+  game.gameTime++;
+
+  // Dog roll
+  game.dogRollPhase+=0.035;
+
+  // Dog laugh every ~2s (keep going during game over too)
+  if(game.state!==State.START){
+    game.dogLaughTimer--;
+    if(game.dogLaughTimer<=0){
+      const interval=game.state===State.GAME_OVER?60:120;
+      game.dogLaughTimer=interval;
+      Sound.dogLaugh();
+    }
+
+    // Dog grows when bear bursts
+    if(game.state===State.BURST||game.state===State.GAME_OVER){
+      game.dogTargetScale=1.8;
+      game.dogShake=8+Math.random()*6;
+    }else{
+      game.dogTargetScale=1;
+      if(game.dogShake>0) game.dogShake*=0.9;
+    }
+    game.dogScale+=(game.dogTargetScale-game.dogScale)*0.05;
+  }
+
+  // Walking intro
+  if(game.state===State.WALKING){
+    game.walkTimer++;
+    const walkSpeed=Math.max(3,W*0.003);
+    if(game.bearX<game.targetX){
+      game.bearX+=walkSpeed;
+      if(game.walkTimer%Math.max(6,Math.floor(16-walkSpeed))===0) Sound.walk();
+    }else{
+      game.bearX=game.targetX;
+      if(game.introStage===0){
+        game.introStage=1;
+        game.introBubble="Phew... I'm so thirsty!";
+        game.introBubbleAlpha=1;
+        setTimeout(()=>{
+          if(game.state===State.WALKING){
+            game.introStage=2;
+            game.introBubble='';
+            game.introBubbleAlpha=0;
+            game.state=State.THIRSTY;
+            game.tongueOut=true;
+            game.canDrink=true;
+            game.showPrompt=true;
+            game.promptAlpha=0;
+          }
+        },2500);
+      }
+    }
+  }
+
+  // Prompt fade in
+  if(game.showPrompt&&game.promptAlpha<1){
+    game.promptAlpha=Math.min(1,game.promptAlpha+0.02);
+  }
+
+  // Sweat drops
+  if(game.tongueOut||game.drinkCount>7){
+    if(Math.random()<0.05){
+      const bellyR=game.baseRadius+game.drinkCount*8;
+      game.sweatDrops.push({
+        x:(Math.random()-0.5)*50,
+        y:-bellyR*1.2-Math.random()*30,
+        w:4+Math.random()*4,
+        h:6+Math.random()*4
+      });
+    }
+    for(let i=game.sweatDrops.length-1;i>=0;i--){
+      game.sweatDrops[i].y-=0.5;
+      game.sweatDrops[i].x+=Math.sin(game.gameTime*0.05+i)*0.3;
+      if(game.sweatDrops[i].y<-100) game.sweatDrops.splice(i,1);
+    }
+  }
+
+  // DRINKING state - gulp animation
+  if(game.state===State.DRINKING){
+    game.drinkAnimTimer--;
+    // Throat bob: rapid head bob
+    game.headTilt=-0.2+Math.sin(game.gameTime*0.3)*0.06;
+    if(game.drinkAnimTimer<=0){
+      // Transition to appropriate state
+      if(game.drinkCount>7){
+        game.state=State.WARNING;
+      }else{
+        game.state=State.THIRSTY;
+      }
+      game.headTilt=-0.05;
+    }
+  }
+
+  // Belly scale elastic animation
+  game.bellyScale+=(game.targetBellyScale-game.bellyScale)*0.12;
+  if(game.bellyScale>1.01&&game.state!==State.BURST) game.targetBellyScale=1;
+
+  // Head tilt recovery
+  if(game.headTilt<0) game.headTilt+=0.01;
+  if(game.headTilt>0) game.headTilt=0;
+
+  // Bottle recovery
+  if(game.bottleAngle>0) game.bottleAngle*=0.92;
+  if(game.bottleAngle<0.001) game.bottleAngle=0;
+  if(game.bottleSquash<1) game.bottleSquash+=(1-game.bottleSquash)*0.12;
+
+  // Bottle shake
+  if(game.bottleShake>0) game.bottleShake*=0.9;
+  if(game.bottleShake<0.1) game.bottleShake=0;
+
+  // Stream animation
+  if(game.isStreaming){
+    game.streamProgress+=0.03;
+    if(game.streamProgress>=1){
+      game.isStreaming=false;
+      game.streamProgress=0;
+    }
+  }
+
+  // Burp timer
+  if(game.burpTimer>0) game.burpTimer--;
+
+  // Warning state
+  if(game.state===State.WARNING){
+    game.shakeAmount=8+Math.sin(game.gameTime*0.05)*4;
+    if(game.stopBubble.scale<1) game.stopBubble.scale=Math.min(1,game.stopBubble.scale+0.05);
+    game.stopBubble.shakeX=(Math.random()-0.5)*6;
+    game.stopBubble.shakeY=(Math.random()-0.5)*6;
+    game.bottleShake=5+Math.random()*5;
+  }
+
+  // Burst state
+  if(game.state===State.BURST){
+    game.burstTimer++;
+    game.shakeAmount=15*(1-game.burstTimer/30);
+    // BOOM text scale animation
+    if(game.boomText.show){
+      game.boomText.scale+=(1.2-game.boomText.scale)*0.08;
+      if(game.burstTimer>30) game.boomText.alpha=Math.max(0,game.boomText.alpha-0.02);
+    }
+    // Belly keeps growing
+    game.targetBellyScale=2.5+game.burstTimer*0.02;
+    if(game.burstTimer>20){
+      game.bearBodyAngle+=0.04;
+      if(game.bearBodyAngle>Math.PI*0.5) game.bearBodyAngle=Math.PI*0.5;
+      game.bearRagdollY=5;
+    }
+    if(game.burstTimer>90){
+      endGame();
+    }
+    updateParticles();
+  }
+
+  // Game over
+  if(game.state===State.GAME_OVER){
+    updateParticles();
+  }
+
+  // Plus ones
+  updatePlusOnes();
+
+  // Warning beep every few frames
+  if(game.state===State.WARNING&&game.gameTime%60===0){
+    Sound.warning();
+  }
+
+  // Click cooldown
+  if(clickCooldown>0) clickCooldown--;
+}
+
+// ===================== RENDER ========================================
+function render(){
+  ctx.clearRect(0,0,W,H);
+
+  // Screen shake
+  ctx.save();
+  if(game.shakeAmount>0.5){
+    const sx=(Math.random()-0.5)*game.shakeAmount;
+    const sy=(Math.random()-0.5)*game.shakeAmount;
+    ctx.translate(sx,sy);
+  }
+
+  drawBackground();
+  drawDog();
+  drawStopBubble();
+  drawBoomText();
+  drawParticles();
+  drawBear();
+  drawPlusOnes();
+  drawStream();
+  drawBottle();
+  drawIntroBubble();
+  drawPrompt();
+
+  // Drink counter
+  if(game.canDrink&&game.state!==State.BURST&&game.state!==State.GAME_OVER){
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    roundRect(ctx,W*0.02,H*0.02,Math.min(W*0.2,180),H*0.05,H*0.015);
+    ctx.fill();
+    ctx.fillStyle='#FFF';
+    ctx.font=`bold ${H*0.025}px sans-serif`;
+    ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText(`🧃 ${game.drinkCount}/${game.maxSafeDrinks}`,W*0.03,H*0.045);
+  }
+
+  ctx.restore(); // screen shake
+}
+
+// ===================== GAME LOOP =====================================
+function gameLoop(){
+  update();
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+// ===================== INTERACTIONS ==================================
+function getClickPos(e){
+  const rect=canvas.getBoundingClientRect();
+  let x,y;
+  if(e.touches){
+    x=e.touches[0].clientX-rect.left;
+    y=e.touches[0].clientY-rect.top;
+  }else{
+    x=e.clientX-rect.left;
+    y=e.clientY-rect.top;
+  }
+  const scaleX=canvas.width/rect.width;
+  const scaleY=canvas.height/rect.height;
+  return {x:x*scaleX,y:y*scaleY};
+}
+
+function isBottleHit(px,py){
+  const bx=bottleCenterX(),by=bottleCenterY();
+  const bw=Math.min(W,H)*0.06,bh=Math.min(W,H)*0.12;
+  return px>=bx-bw&&px<=bx+bw&&py>=by-bh&&py<=by+bh;
+}
+
+let clickCooldown=0;
+function handleClick(e){
+  e.preventDefault();
+  if(clickCooldown>0) return;
+  const pos=getClickPos(e);
+  if(game.canDrink&&isBottleHit(pos.x,pos.y)){
+    clickCooldown=15;
+    doDrink();
+  }
+}
+// Only use touchstart to avoid double-fire on mobile
+canvas.addEventListener('touchstart',handleClick,{passive:false});
+canvas.addEventListener('mousedown',handleClick);
+
+document.getElementById('playBtn').addEventListener('click',()=>{
+  try{getAudioCtx()}catch(e){}
+  startGame();
+});
+
+document.getElementById('restartBtn').addEventListener('click',()=>{
+  startGame();
+});
+
+// ===================== BOOT ==========================================
+// Proper resize handler that updates character positions
+function onResize(){
+  resize();
+  if(typeof game !== 'undefined' && game.state!==State.START&&game.state!==State.WALKING){
+    game.bearY=bearCenterY();
+    game.targetX=bearCenterX();
+    if(game.bearX>0) game.bearX=bearCenterX();
+  }
+}
+window.addEventListener('resize',onResize);
+window.addEventListener('orientationchange',()=>setTimeout(onResize,300));
+onResize();
+
+// Initialize bear Y
+game.bearY=bearCenterY();
+game.targetX=bearCenterX();
+
+gameLoop();
+</script>
+</body>
+</html>

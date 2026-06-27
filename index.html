@@ -533,6 +533,21 @@ function drawBear(){
   ctx.beginPath();ctx.arc(bellyCx-legR*0.2,bellyCy-legR*0.05,3,0,Math.PI*2);ctx.fill();
   ctx.beginPath();ctx.arc(bellyCx+legR*0.2,bellyCy-legR*0.05,3,0,Math.PI*2);ctx.fill();
 
+  // Stress cracks when belly is critical (fillLevel > 0.85)
+  if(game.fillLevel>0.85&&game.state!==State.BURST){
+    ctx.strokeStyle='rgba(255,50,50,0.5)';ctx.lineWidth=2;
+    const crackPhase=game.gameTime*0.05;
+    for(let i=0;i<5;i++){
+      const a=crackPhase+i*1.3;
+      const r1=bellyR*scale*0.5,r2=bellyR*scale*0.9;
+      const sx=bellyCx+Math.cos(a)*r1,sAy=bellyCy+Math.sin(a)*r1;
+      const ex=bellyCx+Math.cos(a+0.3)*r2,sBy=bellyCy+Math.sin(a+0.3)*r2;
+      ctx.beginPath();ctx.moveTo(sx,sAy);
+      ctx.lineTo(bellyCx+Math.cos(a+0.15)*(r1+r2)*0.5,bellyCy+Math.sin(a+0.15)*(r1+r2)*0.5);
+      ctx.lineTo(ex,sBy);ctx.stroke();
+    }
+  }
+
   // --- LEGS (fixed size, planted on ground) ---
   const legH=legR*0.5;
   // Left leg
@@ -846,21 +861,30 @@ function drawStopBubble(){
 
 function drawPrompt(){
   if(!game.showPrompt) return;
-  const bx=bottleCenterX(),by=bottleCenterY()-H*0.12;
   ctx.globalAlpha=game.promptAlpha;
-  const s=Math.min(W,H)*0.022;
-  const text='Click the bottle to force-feed!';
-  drawBubble(bx,by,text,s,'rgba(255,255,255,0.9)','#FF6F00','rgba(0,0,0,0.1)');
-  ctx.globalAlpha=1;
+  const bx=bottleCenterX(),by=bottleCenterY();
 
-  // Arrow pointing down to bottle
-  ctx.fillStyle=`rgba(255,100,50,${0.5+0.5*Math.sin(game.gameTime*0.005)})`;
-  ctx.beginPath();
-  const ax=bx,ay=by+H*0.03;
-  ctx.moveTo(ax,ay+H*0.04);
-  ctx.lineTo(ax-H*0.015,ay);
-  ctx.lineTo(ax+H*0.015,ay);
-  ctx.fill();
+  // Pulsing ring around bottle
+  const ringR=Math.min(W,H)*0.08+Math.sin(game.gameTime*0.005)*Math.min(W,H)*0.015;
+  ctx.strokeStyle=`rgba(255,200,50,${0.3+0.2*Math.sin(game.gameTime*0.005)})`;
+  ctx.lineWidth=3;ctx.setLineDash([6,8]);
+  ctx.beginPath();ctx.arc(bx,by,ringR,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);
+  // Second ring (opposite phase)
+  const ringR2=Math.min(W,H)*0.09+Math.sin(game.gameTime*0.005+Math.PI)*Math.min(W,H)*0.012;
+  ctx.strokeStyle=`rgba(255,200,50,${0.15+0.15*Math.sin(game.gameTime*0.005+Math.PI)})`;
+  ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(bx,by,ringR2,0,Math.PI*2);ctx.stroke();
+
+  // Small label next to bottle
+  const s=Math.min(W,H)*0.015;
+  const lx=bx-Math.min(W,H)*0.1,ly=by+s*0.2;
+  ctx.fillStyle='rgba(255,255,255,0.9)';ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1;
+  roundRect(ctx,lx-s*0.4,ly-s*0.2,s*3.5,s*1.1,s*0.25);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#E65100';ctx.font=`bold ${s*0.7}px sans-serif`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('💧 Hold!',lx+s*1.3,ly+s*0.35);
+  ctx.globalAlpha=1;
 }
 
 // ----- Particles -----
@@ -893,8 +917,8 @@ function drawParticles(){
 
 function spawnBurstParticles(){
   const cx=game.bearX,cy=game.bearY;
-  const colors=['#8B5E3C','#C4956A','#D4A574','#6B3F1F','#FF5252','#FF8A80','#FFD700','#4CAF50'];
-  for(let i=0;i<80;i++){
+  const colors=['#8B5E3C','#C4956A','#D4A574','#6B3F1F','#FF5252','#FF8A80','#FFD700','#4CAF50','#00E5FF','#E040FB'];
+  for(let i=0;i<120;i++){
     const angle=Math.random()*Math.PI*2;
     const speed=3+Math.random()*8;
     game.burstParticles.push({
@@ -989,37 +1013,73 @@ function drawBoomText(){
   if(!game.boomText.show||game.boomText.alpha<=0) return;
   ctx.save();
   ctx.globalAlpha=game.boomText.alpha;
-  const cx=game.bearX,cy=game.bearY-H*0.2;
+  const cx=game.bearX,cy=game.bearY-H*0.25;
   ctx.translate(cx,cy);
   const s=game.boomText.scale;
   ctx.scale(s,s);
-  // Shockwave circle
-  const swRadius=Math.min(W,H)*0.15;
-  ctx.strokeStyle=`rgba(255,200,50,${0.3*game.boomText.alpha})`;
-  ctx.lineWidth=4;
-  ctx.beginPath();ctx.arc(0,0,swRadius,0,Math.PI*2);ctx.stroke();
-  ctx.strokeStyle=`rgba(255,100,50,${0.15*game.boomText.alpha})`;
-  ctx.lineWidth=2;
-  ctx.beginPath();ctx.arc(0,0,swRadius*1.3,0,Math.PI*2);ctx.stroke();
-  // Text shadow
-  ctx.fillStyle='rgba(0,0,0,0.5)';
-  ctx.font=`bold ${Math.min(W,H)*0.2}px sans-serif`;
+
+  // Expanding shockwave rings
+  const waveR=Math.min(W,H)*(0.08+game.burstTimer*0.004);
+  for(let i=0;i<3;i++){
+    const r=waveR+i*Math.min(W,H)*0.04;
+    ctx.strokeStyle=`rgba(255,200,50,${Math.max(0,0.25-i*0.08)*game.boomText.alpha})`;
+    ctx.lineWidth=3-i;
+    ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
+  }
+
+  // Text wobble
+  const wobX=Math.sin(game.gameTime*0.08)*4;
+  const wobY=Math.cos(game.gameTime*0.06)*3;
+  // Shadow layers (depth)
+  const fontSize=Math.min(W,H)*0.26;
+  for(let i=4;i>0;i--){
+    ctx.fillStyle=`rgba(0,0,0,${0.08+i*0.06})`;
+    ctx.font=`900 ${fontSize}px 'Arial Black','Impact',sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('BOOM!',i*2+wobX,i*2+wobY);
+  }
+  // Outer stroke
+  ctx.strokeStyle='#B71C1C';ctx.lineWidth=10;
+  ctx.font=`900 ${fontSize}px 'Arial Black','Impact',sans-serif`;
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('BOOM!',5,5);
-  // Main text
-  ctx.fillStyle='#FFD700';
-  ctx.strokeStyle='#D32F2F';
-  ctx.lineWidth=6;
-  ctx.strokeText('BOOM!',0,0);
-  ctx.fillText('BOOM!',0,0);
-  // Small secondary text
-  ctx.font=`bold ${Math.min(W,H)*0.06}px sans-serif`;
+  ctx.strokeText('BOOM!',wobX,wobY);
+  // Mid stroke
+  ctx.strokeStyle='#FF6F00';ctx.lineWidth=6;
+  ctx.strokeText('BOOM!',wobX,wobY);
+  // Inner stroke
+  ctx.strokeStyle='#FFD600';ctx.lineWidth=3;
+  ctx.strokeText('BOOM!',wobX,wobY);
+  // Fill
   ctx.fillStyle='#FFF';
-  ctx.strokeStyle='#333';
-  ctx.lineWidth=3;
-  const subText="That's gonna leave a mark!";
-  ctx.strokeText(subText,0,Math.min(W,H)*0.12);
-  ctx.fillText(subText,0,Math.min(W,H)*0.12);
+  ctx.fillText('BOOM!',wobX,wobY);
+
+  // Stars / sparkles around the text
+  const starCount=8+Math.floor(game.burstTimer*0.15);
+  for(let i=0;i<starCount;i++){
+    const a=i*2.4+game.burstTimer*0.02;
+    const dist=fontSize*(0.5+Math.sin(i*1.7+game.burstTimer*0.03)*0.3);
+    const sx=Math.cos(a)*dist+wobX,sy=Math.sin(a)*dist+wobY;
+    const starS=3+Math.sin(i*3+game.burstTimer*0.05)*2;
+    ctx.fillStyle=['#FFD600','#FF6F00','#FFF','#FF1744','#00E5FF'][i%5];
+    ctx.font=`${starS*2}px sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('✦',sx,sy);
+  }
+
+  // Subtitle (appears after a moment)
+  if(game.burstTimer>15){
+    const subAlpha=Math.min(1,(game.burstTimer-15)/15)*game.boomText.alpha;
+    ctx.globalAlpha=subAlpha;
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.font=`bold ${Math.min(W,H)*0.05}px sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText("That's gonna leave a mark!",2,fontSize*0.5+4);
+    ctx.fillStyle='#FFF';
+    ctx.strokeStyle='#333';ctx.lineWidth=2;
+    ctx.strokeText("That's gonna leave a mark!",0,fontSize*0.5);
+    ctx.fillText("That's gonna leave a mark!",0,fontSize*0.5);
+  }
+
   ctx.restore();
 }
 
@@ -1105,6 +1165,7 @@ function startGame(){
   game.targetX=bearCenterX();
   game.isWalking=true;
   game.introStage=0;
+  document.body.style.backgroundColor='#2E4053';
   document.getElementById('startScreen').style.display='none';
   document.getElementById('gameOverScreen').classList.remove('show');
   document.getElementById('gameOverScreen').style.display='none';
@@ -1144,13 +1205,17 @@ function triggerBurst(){
   game.burstTimer=0;
   game.stopBubble.show=false;
   game.boomText={show:true,scale:0.01,alpha:1};
-  // Rapid belly expansion
-  game.targetBellyScale=2.5;
+  // Instant belly SNAP for dramatic pop
+  game.bellyScale=4;
+  game.targetBellyScale=4;
   Sound.burst();
   spawnBurstParticles();
-  // Flash
-  document.body.style.backgroundColor='#FF0000';
-  setTimeout(()=>document.body.style.backgroundColor='',100);
+  // Strobe flash
+  for(let t=0;t<400;t+=80){
+    setTimeout(()=>{document.body.style.backgroundColor='#FFF'},t);
+    setTimeout(()=>{document.body.style.backgroundColor='#FF1744'},t+30);
+  }
+  setTimeout(()=>{document.body.style.backgroundColor='#2E4053'},450);
 }
 
 function endGame(){
@@ -1469,9 +1534,17 @@ function update(){
     game.headTilt=-0.1+Math.sin(game.gameTime*0.2)*0.05;
   }
 
-  // Belly scale elastic animation
-  game.bellyScale+=(game.targetBellyScale-game.bellyScale)*0.12;
-  if(game.bellyScale>1.01&&game.state!==State.BURST) game.targetBellyScale=1;
+  // Belly scale elastic animation (bypassed during burst for instant snap)
+  if(game.state!==State.BURST){
+    game.bellyScale+=(game.targetBellyScale-game.bellyScale)*0.12;
+    if(game.bellyScale>1.01) game.targetBellyScale=1;
+  }
+
+  // Pre-burst trembling when fillLevel is critical
+  if(game.fillLevel>0.85&&game.state===State.THIRSTY){
+    game.shakeAmount=4+Math.sin(game.gameTime*0.12)*3;
+    game.bellyScale=1+Math.sin(game.gameTime*0.15)*0.04;
+  }
 
   // Head tilt recovery
   if(game.headTilt<0) game.headTilt+=0.01;
@@ -1513,22 +1586,41 @@ function update(){
   // Burst state
   if(game.state===State.BURST){
     game.burstTimer++;
-    game.shakeAmount=15*(1-game.burstTimer/30);
-    // BOOM text scale animation
-    if(game.boomText.show){
-      game.boomText.scale+=(1.2-game.boomText.scale)*0.08;
-      if(game.burstTimer>30) game.boomText.alpha=Math.max(0,game.boomText.alpha-0.02);
+    const t=game.burstTimer;
+    // Frame 0-3: freeze-frame anticipation (intense shake, no collapse yet)
+    if(t<4){
+      game.shakeAmount=30;
+      game.bearBodyAngle=0;
+      game.bellyScale=4.5+Math.sin(t*2)*0.3;
+    }else{
+      // Screen shake: violent then fade
+      game.shakeAmount=t<15?28:Math.max(0,22-t*0.3);
+      // BOOM text: punch out fast
+      if(game.boomText.show){
+        if(t<16){
+          game.boomText.scale=0.01+(t-4)/12*1.5;
+        }else if(t<22){
+          game.boomText.scale=1.5-(t-16)/6*0.25;
+        }else if(t<30){
+          game.boomText.scale=1.25+(t-22)/8*0.1;
+        }else{
+          game.boomText.scale=1.35;
+        }
+        if(t>45) game.boomText.alpha=Math.max(0,1-(t-45)/45);
+      }
+      // Bear collapses fast after anticipation
+      if(t>6){
+        game.bearBodyAngle+=0.08;
+        if(game.bearBodyAngle>Math.PI*0.5){
+          game.bearBodyAngle=Math.PI*0.5;
+          game.bearRagdollY=6;
+        }
+      }
     }
-    // Belly keeps growing
-    game.targetBellyScale=2.5+game.burstTimer*0.02;
-    if(game.burstTimer>20){
-      game.bearBodyAngle+=0.04;
-      if(game.bearBodyAngle>Math.PI*0.5) game.bearBodyAngle=Math.PI*0.5;
-      game.bearRagdollY=5;
-    }
-    if(game.burstTimer>90){
-      endGame();
-    }
+    // More particles burst at frames 4, 10
+    if(t===4) spawnBurstParticles();
+    if(t===10) spawnBurstParticles();
+    if(t>75) endGame();
     updateParticles();
   }
 
@@ -1584,6 +1676,12 @@ function render(){
     ctx.textAlign='left';ctx.textBaseline='middle';
     const pct=Math.round(game.fillLevel*100);
     ctx.fillText(`🧃 ${pct}%`,W*0.03,H*0.045);
+  }
+
+  // White flash overlay during early burst (after anticipation)
+  if(game.state===State.BURST&&game.burstTimer>=4&&game.burstTimer<18){
+    ctx.fillStyle=`rgba(255,255,255,${0.5*(1-(game.burstTimer-4)/14)})`;
+    ctx.fillRect(0,0,W,H);
   }
 
   ctx.restore(); // screen shake

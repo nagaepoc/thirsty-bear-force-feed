@@ -311,13 +311,25 @@ let game={
 };
 
 // ===================== COORDINATE HELPERS ============================
-function groundY(){return H*0.78}
+function groundY(){return H*0.82}
 function bearCenterX(){return W*0.62}
-function bearCenterY(){return groundY()-H*0.18}
+function bearCenterY(){
+  // Feet bottom = bearY + baseRadius * 1.12, want on ground
+  return groundY() - game.baseRadius * 1.12;
+}
 function dogCenterX(){return W*0.15}
-function dogCenterY(){return groundY()-H*0.06}
+function dogCenterY(){
+  // Body sits on ground; shadow drawn at dog Y + s*0.4, shadow ry = s*0.3
+  // For shadow to be on ground: dy + s*0.4 + s*0.3 = groundY
+  const s=Math.min(W,H)*0.04;
+  return groundY() - s * 0.7;
+}
 function bottleCenterX(){return W*0.5}
-function bottleCenterY(){return groundY()-H*0.04}
+function bottleCenterY(){
+  // Bottle body bottom = by - bh*0.05, need on ground
+  const bh=Math.min(W,H)*0.04;
+  return groundY() + bh * 0.05;
+}
 
 // ===================== DRAWING FUNCTIONS =============================
 
@@ -446,6 +458,9 @@ function drawBear(){
     ctx.rotate(game.bearBodyAngle);
   }
 
+  // Fixed structural size (legs, head, arms don't grow)
+  const legR=game.baseRadius;
+  // Belly expands independently
   const bellyR=game.baseRadius+game.drinkCount*8;
   const scale=game.bellyScale;
 
@@ -454,66 +469,85 @@ function drawBear(){
   if(game.state===State.WALKING&&!game.bearDead){
     bobY=Math.sin(game.walkTimer*0.15)*4;
   }
-
   ctx.translate(0,bobY);
 
-  // Body (belly)
-  const bellyGrad=ctx.createRadialGradient(-bellyR*0.2,-bellyR*0.3,0,0,0,bellyR*scale);
+  // --- Shadow on ground ---
+  ctx.fillStyle='rgba(0,0,0,0.12)';
+  ctx.beginPath();ctx.ellipse(0,legR*1.15,legR*0.9,legR*0.12,0,0,Math.PI*2);ctx.fill();
+
+  // --- BODY (belly — grows independently) ---
+  // Belly center is at fixed legR*0.2 from origin (matching leg structure)
+  const bellyCx=0, bellyCy=legR*0.2;
+  // Draw large belly behind legs
+  const bellyGrad=ctx.createRadialGradient(bellyCx-bellyR*0.2,bellyCy-bellyR*0.3,0,bellyCx,bellyCy,bellyR*scale);
   bellyGrad.addColorStop(0,'#C4956A');
   bellyGrad.addColorStop(0.7,'#8B5E3C');
   bellyGrad.addColorStop(1,'#6B3F1F');
   ctx.fillStyle=bellyGrad;
-  ctx.beginPath();ctx.arc(0,bellyR*0.2,bellyR*scale,0,Math.PI*2);ctx.fill();
-
-  // Belly outline
+  ctx.beginPath();ctx.arc(bellyCx,bellyCy,bellyR*scale,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle='#5A3520';ctx.lineWidth=2;
-  ctx.beginPath();ctx.arc(0,bellyR*0.2,bellyR*scale,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.arc(bellyCx,bellyCy,bellyR*scale,0,Math.PI*2);ctx.stroke();
 
-  // Darker belly center
+  // Darker belly center (follows belly center)
   ctx.fillStyle='#D4A574';
-  ctx.beginPath();ctx.ellipse(0,bellyR*0.4,bellyR*0.5*scale,bellyR*0.4*scale,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(bellyCx,bellyCy+bellyR*0.2,bellyR*0.5*scale,bellyR*0.4*scale,0,0,Math.PI*2);ctx.fill();
 
-  // Nipple dots
+  // Nipple dots (fixed position near belly center)
   ctx.fillStyle='#5A3520';
-  ctx.beginPath();ctx.arc(-bellyR*0.2*scale,bellyR*0.15,3,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(bellyR*0.2*scale,bellyR*0.15,3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(bellyCx-legR*0.2,bellyCy-legR*0.05,3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(bellyCx+legR*0.2,bellyCy-legR*0.05,3,0,Math.PI*2);ctx.fill();
 
-  // Legs
-  const legH=bellyR*0.5;
+  // --- LEGS (fixed size, planted on ground) ---
+  const legH=legR*0.5;
   // Left leg
   ctx.fillStyle='#7A4E2D';
-  roundRect(ctx,-bellyR*0.5*scale,bellyR*0.5,bellyR*0.3,legH,6);ctx.fill();
+  roundRect(ctx,-legR*0.5,legR*0.5,legR*0.3,legH,6);ctx.fill();
   // Right leg
-  roundRect(ctx,bellyR*0.2*scale,bellyR*0.5,bellyR*0.3,legH,6);ctx.fill();
+  roundRect(ctx,legR*0.2,legR*0.5,legR*0.3,legH,6);ctx.fill();
   // Feet
   ctx.fillStyle='#5A3520';
-  ctx.beginPath();ctx.ellipse(-bellyR*0.35*scale,bellyR*0.5+legH,bellyR*0.2,bellyR*0.12,0,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.ellipse(bellyR*0.35*scale,bellyR*0.5+legH,bellyR*0.2,bellyR*0.12,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(-legR*0.35,legR*0.5+legH,legR*0.2,legR*0.12,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(legR*0.35,legR*0.5+legH,legR*0.2,legR*0.12,0,0,Math.PI*2);ctx.fill();
 
-  // Arms
+  // --- ARMS (fixed size, animated) ---
   if(game.state!==State.BURST&&game.state!==State.GAME_OVER){
-    const armSwing = game.state===State.WALKING ? Math.sin(game.walkTimer*0.15)*0.2 : 0;
+    let armSwing=0;
+    if(game.state===State.WALKING){
+      // Searching / desperate walk: arms reach forward
+      armSwing=Math.sin(game.walkTimer*0.12)*0.4;
+    }
     ctx.fillStyle='#7A4E2D';
+    // Left arm
     ctx.save();
-    ctx.translate(-bellyR*0.8*scale,bellyR*0.1);
-    ctx.rotate(-0.3+armSwing);
-    roundRect(ctx,-5,0,10,bellyR*0.45,5);ctx.fill();
+    ctx.translate(-legR*0.8,legR*0.1);
+    ctx.rotate(-0.4+armSwing);
+    roundRect(ctx,-4,0,8,legR*0.45,5);ctx.fill();
     ctx.restore();
+    // Right arm
     ctx.save();
-    ctx.translate(bellyR*0.8*scale,bellyR*0.1);
-    ctx.rotate(0.3-armSwing);
-    roundRect(ctx,-5,0,10,bellyR*0.45,5);ctx.fill();
+    ctx.translate(legR*0.8,legR*0.1);
+    ctx.rotate(0.4-armSwing);
+    roundRect(ctx,-4,0,8,legR*0.45,5);ctx.fill();
     ctx.restore();
   }
 
-  // Head
-  const headY=-bellyR*0.7*scale;
-  const headR=bellyR*0.55;
+  // --- HEAD (fixed size, animated for thirsty search) ---
+  const headY=-legR*0.7;
+  const headR=legR*0.55;
 
-  // Head tilt
+  // Head tilt: combine drinking tilt with walking look-around
+  let headAngle=game.headTilt;
+  if(game.state===State.WALKING){
+    // During walk, head looks around searching for water
+    headAngle+=Math.sin(game.walkTimer*0.08)*0.12 + Math.sin(game.walkTimer*0.03)*0.08;
+  }
+  // Sniff motion: occasional head drop
+  const sniff=Math.max(0,Math.sin(game.walkTimer*0.05))*0.1;
+  const headBobY=game.state===State.WALKING?sniff*legR*0.3:0;
+
   ctx.save();
-  ctx.translate(0,headY);
-  ctx.rotate(game.headTilt);
+  ctx.translate(0,headY+headBobY);
+  ctx.rotate(headAngle);
 
   // Ears
   ctx.fillStyle='#6B3F1F';
@@ -544,46 +578,38 @@ function drawBear(){
 
   // Mouth
   if((game.tongueOut||game.drinkCount>7)&&game.state!==State.DRINKING&&game.state!==State.BURST){
-    // Tongue out
     ctx.fillStyle='#D32F2F';
     ctx.beginPath();ctx.ellipse(0,headR*0.4,headR*0.15,headR*0.2,0,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#E57373';
     ctx.beginPath();ctx.ellipse(0,headR*0.42,headR*0.08,headR*0.12,0,0,Math.PI*2);ctx.fill();
   }else{
-    // Normal mouth
     ctx.strokeStyle='#2C1810';ctx.lineWidth=1.5;
     ctx.beginPath();ctx.arc(0,headR*0.3,headR*0.15,0.1,Math.PI-0.1);ctx.stroke();
   }
 
-  // Eyes - different expressions
+  // Eyes
   if(game.state===State.BURST||game.state===State.GAME_OVER){
-    // X_X eyes
     ctx.strokeStyle='#2C1810';ctx.lineWidth=3;
     ctx.beginPath();ctx.moveTo(-headR*0.3,-headR*0.15);ctx.lineTo(-headR*0.1,-headR*0.35);ctx.moveTo(-headR*0.1,-headR*0.15);ctx.lineTo(-headR*0.3,-headR*0.35);ctx.stroke();
     ctx.beginPath();ctx.moveTo(headR*0.1,-headR*0.15);ctx.lineTo(headR*0.3,-headR*0.35);ctx.moveTo(headR*0.3,-headR*0.15);ctx.lineTo(headR*0.1,-headR*0.35);ctx.stroke();
   }else if(game.drinkCount>7){
-    // Scared eyes
     ctx.fillStyle='#FFF';
     ctx.beginPath();ctx.ellipse(-headR*0.25,-headR*0.1,headR*0.18,headR*0.2,0,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.ellipse(headR*0.25,-headR*0.1,headR*0.18,headR*0.2,0,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#2C1810';
     ctx.beginPath();ctx.arc(-headR*0.25,-headR*0.05,headR*0.08,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(headR*0.25,-headR*0.05,headR*0.08,0,Math.PI*2);ctx.fill();
-    // Eyebrows
     ctx.strokeStyle='#2C1810';ctx.lineWidth=2.5;
     ctx.beginPath();ctx.moveTo(-headR*0.4,-headR*0.35);ctx.lineTo(-headR*0.1,-headR*0.25);ctx.stroke();
     ctx.beginPath();ctx.moveTo(headR*0.4,-headR*0.35);ctx.lineTo(headR*0.1,-headR*0.25);ctx.stroke();
   }else if(game.drinkCount>4){
-    // Happy eyes
     ctx.strokeStyle='#2C1810';ctx.lineWidth=2;
     ctx.beginPath();ctx.arc(-headR*0.22,-headR*0.15,headR*0.08,0,Math.PI);ctx.stroke();
     ctx.beginPath();ctx.arc(headR*0.22,-headR*0.15,headR*0.08,0,Math.PI);ctx.stroke();
   }else{
-    // Normal cute eyes
     ctx.fillStyle='#2C1810';
     ctx.beginPath();ctx.arc(-headR*0.22,-headR*0.15,headR*0.07,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(headR*0.22,-headR*0.15,headR*0.07,0,Math.PI*2);ctx.fill();
-    // Eye shine
     ctx.fillStyle='#FFF';
     ctx.beginPath();ctx.arc(-headR*0.19,-headR*0.18,headR*0.025,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(headR*0.29,-headR*0.18,headR*0.025,0,Math.PI*2);ctx.fill();
@@ -592,8 +618,8 @@ function drawBear(){
   ctx.restore(); // head tilt
   ctx.restore(); // global transform
 
-  // Sweat drops
-  if(game.tongueOut||game.drinkCount>7){
+  // Sweat drops (during walking to show thirst, and always when tongue out or warning)
+  if(game.state===State.WALKING||game.tongueOut||game.drinkCount>7){
     for(const d of game.sweatDrops){
       ctx.fillStyle='rgba(100,180,255,0.7)';
       ctx.beginPath();
@@ -617,89 +643,97 @@ function drawDog(){
 
   ctx.save();
   ctx.translate(dx,dy);
-  // Dog shake when laughing hard
+
+  // Shadow on ground (BEFORE rotation — stays planted)
+  ctx.fillStyle='rgba(0,0,0,0.12)';
+  ctx.beginPath();ctx.ellipse(0,s*0.7,s*1.6,s*0.22,0,0,Math.PI*2);ctx.fill();
+
+  // Shake when laughing hard
   if(game.dogShake>0.5){
     ctx.translate((Math.random()-0.5)*game.dogShake,(Math.random()-0.5)*game.dogShake);
   }
   ctx.scale(game.dogScale,game.dogScale);
 
-  // Body rolling - rotate around center
-  ctx.rotate(Math.sin(rollPhase)*0.6);
-
-  // Shadow
-  ctx.fillStyle='rgba(0,0,0,0.15)';
-  ctx.beginPath();ctx.ellipse(0,s*2.5,s*1.8,s*0.5,0,0,Math.PI*2);ctx.fill();
+  // ROFL roll around body center (body bottom touches ground at y = s*0.7)
+  ctx.rotate(Math.sin(rollPhase)*0.5);
 
   // Tail (wagging with roll)
-  ctx.strokeStyle='#8B6F47';ctx.lineWidth=s*0.2;
+  ctx.strokeStyle='#A67B5B';ctx.lineWidth=s*0.18;
   ctx.beginPath();ctx.moveTo(-s*1.2,0);
-  const tailWag=Math.sin(rollPhase*2)*0.3;
+  const tailWag=Math.sin(rollPhase*2)*0.4;
   ctx.quadraticCurveTo(-s*1.8,-s*0.5-tailWag*s,-s*2.2,-s*0.3-tailWag*s*0.5);
   ctx.stroke();
 
   // Body
   ctx.fillStyle='#C4956A';
-  ctx.beginPath();ctx.ellipse(0,0,s*1.4,s*0.7,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(0,0,s*1.3,s*0.65,0,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#A67B5B';ctx.lineWidth=1;
+  ctx.beginPath();ctx.ellipse(0,0,s*1.3,s*0.65,0,0,Math.PI*2);ctx.stroke();
 
   // Belly
   ctx.fillStyle='#D4A574';
-  ctx.beginPath();ctx.ellipse(0,s*0.15,s*1.0,s*0.45,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(0,s*0.15,s*0.9,s*0.4,0,0,Math.PI*2);ctx.fill();
 
-  // Legs (kicking)
+  // Legs (kicking in air)
   const kickPhase=Math.sin(rollPhase*2);
-  ctx.strokeStyle='#A67B5B';ctx.lineWidth=s*0.25;
-  // Front legs
-  ctx.beginPath();ctx.moveTo(s*0.8,s*0.2);
-  ctx.lineTo(s*1.2+kickPhase*s*0.3,s*0.6-kickPhase*s*0.4);
+  ctx.strokeStyle='#A67B5B';ctx.lineWidth=s*0.22;
+  ctx.lineCap='round';
+  // Front legs — kick upward
+  ctx.beginPath();ctx.moveTo(s*0.7,-s*0.1);
+  ctx.lineTo(s*1.0+kickPhase*s*0.3,-s*0.5-kickPhase*s*0.3);
   ctx.stroke();
-  ctx.beginPath();ctx.moveTo(s*0.6,s*0.2);
-  ctx.lineTo(s*0.8-kickPhase*s*0.3,s*0.7+kickPhase*s*0.3);
+  ctx.beginPath();ctx.moveTo(s*0.5,-s*0.1);
+  ctx.lineTo(s*0.7-kickPhase*s*0.3,-s*0.3+kickPhase*s*0.2);
   ctx.stroke();
   // Back legs
-  ctx.beginPath();ctx.moveTo(-s*0.8,s*0.2);
-  ctx.lineTo(-s*1.2+Math.cos(rollPhase*2)*s*0.3,-s*0.1+kickPhase*s*0.5);
+  ctx.beginPath();ctx.moveTo(-s*0.7,-s*0.1);
+  ctx.lineTo(-s*1.1+Math.cos(rollPhase*2)*s*0.2,-s*0.3+kickPhase*s*0.4);
   ctx.stroke();
-  ctx.beginPath();ctx.moveTo(-s*0.6,s*0.2);
-  ctx.lineTo(-s*0.8-Math.cos(rollPhase*2)*s*0.3,s*0.1-kickPhase*s*0.3);
+  ctx.beginPath();ctx.moveTo(-s*0.5,-s*0.1);
+  ctx.lineTo(-s*0.7-Math.cos(rollPhase*2)*s*0.2,-s*0.2-kickPhase*s*0.2);
   ctx.stroke();
+  ctx.lineCap='butt';
   // Paw pads
   ctx.fillStyle='#8B6F47';
-  ctx.beginPath();ctx.arc(s*1.2+kickPhase*s*0.3,s*0.6-kickPhase*s*0.4,s*0.08,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(-s*1.2+Math.cos(rollPhase*2)*s*0.3,-s*0.1+kickPhase*s*0.5,s*0.08,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*1.0+kickPhase*s*0.3,-s*0.5-kickPhase*s*0.3,s*0.07,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(-s*1.1+Math.cos(rollPhase*2)*s*0.2,-s*0.3+kickPhase*s*0.4,s*0.07,0,Math.PI*2);ctx.fill();
 
-  // Head
+  // Head (on the right side, lying sideways)
   ctx.fillStyle='#C4956A';
-  ctx.beginPath();ctx.ellipse(s*1.1,-s*0.2,s*0.5,s*0.4,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(s*1.0,-s*0.25,s*0.45,s*0.38,0.2,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#A67B5B';ctx.lineWidth=1;
+  ctx.beginPath();ctx.ellipse(s*1.0,-s*0.25,s*0.45,s*0.38,0.2,0,Math.PI*2);ctx.stroke();
 
   // Ear (floppy)
   ctx.fillStyle='#A67B5B';
-  ctx.beginPath();ctx.ellipse(s*1.3,-s*0.5,s*0.15,s*0.35,0.3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(s*1.2,-s*0.55,s*0.15,s*0.3,0.4,0,Math.PI*2);ctx.fill();
 
   // Snout
   ctx.fillStyle='#D4A574';
-  ctx.beginPath();ctx.ellipse(s*1.35,-s*0.15,s*0.25,s*0.18,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(s*1.25,-s*0.18,s*0.22,s*0.16,0,0,Math.PI*2);ctx.fill();
 
-  // Nose
+  // Nose (black)
   ctx.fillStyle='#2C1810';
-  ctx.beginPath();ctx.arc(s*1.45,-s*0.15,s*0.07,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*1.35,-s*0.18,s*0.06,0,Math.PI*2);ctx.fill();
 
-  // Eye
-  ctx.fillStyle='#2C1810';
-  ctx.beginPath();ctx.arc(s*1.15,-s*0.28,s*0.06,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#FFF';
-  ctx.beginPath();ctx.arc(s*1.17,-s*0.3,s*0.025,0,Math.PI*2);ctx.fill();
+  // Eye (closed laughing)
+  ctx.strokeStyle='#2C1810';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(s*1.08,-s*0.35,s*0.05,0,Math.PI);ctx.stroke();
 
-  // Tongue (hanging out, laughing)
+  // Tongue hanging out
   ctx.fillStyle='#D32F2F';
-  ctx.beginPath();ctx.ellipse(s*1.4,-s*0.05,s*0.08,s*0.15,0.2,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(s*1.32,-s*0.05,s*0.07,s*0.14,0.3,0,Math.PI*2);ctx.fill();
 
   ctx.restore();
 
-  // Speech bubble - alternates in sync with roll (faster during game over)
-  const bubbleTexts=['LOL','ROFL','HAHAHA','LMAO','DEAD'];
-  const speed=game.state===State.GAME_OVER?0.05:0.018;
-  const bubbleIdx=Math.floor(game.gameTime*speed)%bubbleTexts.length;
-  drawBubble(dx,dy-s*2.5,bubbleTexts[bubbleIdx],s*0.6,'#FFF','#333','rgba(0,0,0,0.1)');
+  // Speech bubble only mid-game onward
+  if(game.state!==State.START&&game.state!==State.WALKING){
+    const bubbleY=dy-s*1.8;
+    const bubbleTexts=['LOL','ROFL','HAHAHA','LMAO','DEAD'];
+    const speed=game.state===State.GAME_OVER?0.05:0.018;
+    const bubbleIdx=Math.floor(game.gameTime*speed)%bubbleTexts.length;
+    drawBubble(dx,bubbleY,bubbleTexts[bubbleIdx],s*0.55,'#FFF','#555','rgba(0,0,0,0.1)');
+  }
 }
 
 // ----- Speech Bubbles -----
@@ -1097,11 +1131,13 @@ function endGame(){
 function update(){
   game.gameTime++;
 
-  // Dog roll
-  game.dogRollPhase+=0.035;
+  // Dog roll: full ROFL mid-game; still/dormant before that
+  if(game.state!==State.START&&game.state!==State.WALKING){
+    game.dogRollPhase+=0.035;
+  }
 
-  // Dog laugh every ~2s (keep going during game over too)
-  if(game.state!==State.START){
+  // Dog laugh mid-game onward (not during intro walking)
+  if(game.state!==State.START&&game.state!==State.WALKING){
     game.dogLaughTimer--;
     if(game.dogLaughTimer<=0){
       const interval=game.state===State.GAME_OVER?60:120;
@@ -1123,7 +1159,7 @@ function update(){
   // Walking intro
   if(game.state===State.WALKING){
     game.walkTimer++;
-    const walkSpeed=Math.max(3,W*0.003);
+    const walkSpeed=Math.max(2,W*0.002);
     if(game.bearX<game.targetX){
       game.bearX+=walkSpeed;
       if(game.walkTimer%Math.max(6,Math.floor(16-walkSpeed))===0) Sound.walk();
@@ -1155,8 +1191,8 @@ function update(){
   }
 
   // Sweat drops
-  if(game.tongueOut||game.drinkCount>7){
-    if(Math.random()<0.05){
+  if(game.state===State.WALKING||game.tongueOut||game.drinkCount>7){
+    if(game.state===State.WALKING ? Math.random()<0.03 : Math.random()<0.05){
       const bellyR=game.baseRadius+game.drinkCount*8;
       game.sweatDrops.push({
         x:(Math.random()-0.5)*50,
@@ -1283,9 +1319,9 @@ function render(){
   drawBoomText();
   drawParticles();
   drawBear();
-  drawPlusOnes();
-  drawStream();
   drawBottle();
+  drawStream();
+  drawPlusOnes();
   drawIntroBubble();
   drawPrompt();
 

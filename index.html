@@ -27,6 +27,7 @@ canvas{display:block;width:100%;height:100%;cursor:pointer;position:relative;z-i
 #gameOverScreen .sub{font-size:clamp(1rem,3vw,1.8rem);color:#ffa07a;margin:.5em 0 0;text-align:center}
 .stats{color:#fff;font-size:clamp(1rem,2.5vw,1.5rem);margin:1em 0;text-align:center}
 .hidden{display:none!important}
+.highscore{font-size:clamp(.8rem,2.5vw,1.3rem);color:#FFD700;margin-bottom:.5em;text-align:center;opacity:.8;letter-spacing:1px}
 </style>
 </head>
 <body>
@@ -34,6 +35,7 @@ canvas{display:block;width:100%;height:100%;cursor:pointer;position:relative;z-i
 <div class="bear-icon">🐻</div>
 <h1>Thirsty Bear<br>Force-Feed!</h1>
 <p class="subtitle">"He said stop... but did you listen?"</p>
+<div class="highscore" id="highScoreDisplay"></div>
 <button class="btn btn-play" id="playBtn">PLAY</button>
 </div>
 <div id="gameOverScreen" class="overlay">
@@ -1340,6 +1342,7 @@ function startGame(){
   game.isWalking=true;
   game.introStage=0;
   document.body.style.backgroundColor='#2E4053';
+  updateHighScoreDisplay();
   document.getElementById('startScreen').style.display='none';
   document.getElementById('gameOverScreen').classList.remove('show');
   document.getElementById('gameOverScreen').style.display='none';
@@ -1397,6 +1400,7 @@ function triggerBurst(){
 
 function endGame(){
   game.state=State.GAME_OVER;
+  saveHighScore(game.popScore);
   const gos=document.getElementById('gameOverScreen');
   gos.style.display='flex';
   gos.classList.add('show');
@@ -1899,26 +1903,26 @@ function render(){
 
   // HUD
   const hudY=H*0.025;
-  // Score (visible as soon as game starts)
+  // HUD panel: score, best, drink fill
   if(game.state!==State.START){
-    ctx.fillStyle='rgba(0,0,0,0.45)';
-    const sw=Math.min(W*0.15,120);
-    roundRect(ctx,W*0.02,H*0.02,sw,H*0.045,H*0.015);
-    ctx.fill();
-    ctx.fillStyle='#FFD600';ctx.font=`bold ${H*0.022}px sans-serif`;
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.fillText(`⭐ ${game.popScore}`,W*0.035,H*0.043);
-  }
-  // Drink counter
-  if(game.canDrink&&game.state!==State.BURST&&game.state!==State.GAME_OVER){
+    const sw=Math.min(W*0.17,140);
+    const hs=localStorage.getItem('bearFeedHighScore');
+    const showFill=game.canDrink&&game.state!==State.BURST&&game.state!==State.GAME_OVER;
+    const rows=showFill?3:2;
+    const ph=H*(0.018+rows*0.028);
     ctx.fillStyle='rgba(0,0,0,0.5)';
-    roundRect(ctx,W*0.02,H*0.08,Math.min(W*0.2,180),H*0.05,H*0.015);
+    roundRect(ctx,W*0.015,H*0.015,sw,ph,H*0.015);
     ctx.fill();
-    ctx.fillStyle='#FFF';
-    ctx.font=`bold ${H*0.025}px sans-serif`;
+    ctx.fillStyle='#FFD600';ctx.font=`bold ${H*0.02}px sans-serif`;
     ctx.textAlign='left';ctx.textBaseline='middle';
-    const pct=Math.round(game.fillLevel*100);
-    ctx.fillText(`🧃 ${pct}%`,W*0.03,H*0.105);
+    ctx.fillText(`⭐ ${game.popScore}`,W*0.03,H*0.035);
+    ctx.fillStyle='#FFA726';ctx.font=`bold ${H*0.016}px sans-serif`;
+    ctx.fillText(`🏆 ${hs||'0'}`,W*0.03,H*0.065);
+    if(showFill){
+      const pct=Math.round(game.fillLevel*100);
+      ctx.fillStyle='#81D4FA';ctx.font=`bold ${H*0.018}px sans-serif`;
+      ctx.fillText(`🧃 ${pct}%`,W*0.03,H*0.095);
+    }
   }
 
   // White flash overlay during early burst (after anticipation)
@@ -2022,6 +2026,18 @@ document.getElementById('restartBtn').addEventListener('click',()=>{
   startGame();
 });
 
+// ===================== HIGH SCORE ====================================
+function updateHighScoreDisplay(){
+  const hs=localStorage.getItem('bearFeedHighScore');
+  const el=document.getElementById('highScoreDisplay');
+  if(el) el.textContent=`🏆 Best: ${hs||'0'}`;
+}
+function saveHighScore(score){
+  const prev=parseInt(localStorage.getItem('bearFeedHighScore')||'0');
+  if(score>prev) localStorage.setItem('bearFeedHighScore',score.toString());
+  updateHighScoreDisplay();
+}
+
 // ===================== BOOT ==========================================
 // Proper resize handler that updates character positions
 function onResize(){
@@ -2044,6 +2060,7 @@ game.targetX=bearCenterX();
 
 initBuildings();
 initFlyingObjects();
+updateHighScoreDisplay();
 gameLoop();
 </script>
 </body>

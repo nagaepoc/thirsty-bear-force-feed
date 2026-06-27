@@ -256,6 +256,7 @@ const State={
 let game={
   state:State.START,
   drinkCount:0,
+  fillLevel:0,
   maxSafeDrinks:15,
   baseRadius:35,
   bearX:-200,
@@ -397,13 +398,15 @@ function drawCloud(x,y,r){
 function drawBottle(){
   const bx=bottleCenterX(),by=bottleCenterY();
   const bw=Math.min(W,H)*0.04,bh=Math.min(W,H)*0.08;
-  // Pulsing glow
+  // Pulsing glow (brighter when feeding)
   const glowPulse=0.5+0.5*Math.sin(game.gameTime*0.003);
-  const glowGrad=ctx.createRadialGradient(bx,by-bh*0.3,0,bx,by-bh*0.3,bh*1.5);
-  glowGrad.addColorStop(0,`rgba(255,200,50,${0.2+0.15*glowPulse})`);
-  glowGrad.addColorStop(0.5,`rgba(255,200,50,${0.08*glowPulse})`);
+  const glowBase=game.feeding?0.5:0.2;
+  const glowAmp=game.feeding?0.3:0.15;
+  const glowGrad=ctx.createRadialGradient(bx,by-bh*0.3,0,bx,by-bh*0.3,bh*1.8);
+  glowGrad.addColorStop(0,`rgba(255,200,50,${glowBase+glowAmp*glowPulse})`);
+  glowGrad.addColorStop(0.5,`rgba(255,200,50,${(glowBase+glowAmp*glowPulse)*0.4})`);
   glowGrad.addColorStop(1,'rgba(255,200,50,0)');
-  ctx.fillStyle=glowGrad;ctx.beginPath();ctx.arc(bx,by-bh*0.3,bh*1.5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=glowGrad;ctx.beginPath();ctx.arc(bx,by-bh*0.3,bh*1.8,0,Math.PI*2);ctx.fill();
   // Bottle body
   ctx.save();
   ctx.translate(bx,by);
@@ -450,7 +453,7 @@ function drawBear(){
     ctx.save();
     ctx.globalAlpha=0.15+0.1*Math.sin(game.gameTime*0.01);
     ctx.fillStyle='#FF0000';
-    ctx.beginPath();ctx.arc(0,0,game.baseRadius+game.drinkCount*28+20,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(0,0,game.baseRadius+game.fillLevel*400+20,0,Math.PI*2);ctx.fill();
     ctx.restore();
   }
 
@@ -462,7 +465,7 @@ function drawBear(){
   // Fixed structural size (legs, head, arms don't grow)
   const legR=game.baseRadius;
   // Belly expands independently
-      const bellyR=game.baseRadius+game.drinkCount*28;
+  const bellyR=game.baseRadius+game.fillLevel*400;
   const scale=game.bellyScale;
 
   // Walking bob
@@ -920,6 +923,8 @@ function drawStream(){
   if(!game.isStreaming) return;
   const startX=bottleCenterX(),startY=bottleCenterY()-H*0.04;
   const endX=game.bearX,endY=game.bearY-H*0.35;
+  // Bottle tilt animation while feeding
+  if(game.feeding) game.bottleAngle=0.15+Math.sin(game.gameTime*0.06)*0.1;
   const progress=game.streamProgress;
 
   ctx.save();
@@ -1007,6 +1012,8 @@ function resetGame(){
   game={
     state:State.START,
     drinkCount:0,
+    fillLevel:0,
+    feeding:false,
     maxSafeDrinks:15,
     baseRadius:35,
     bearX:-200,
@@ -1072,35 +1079,30 @@ function startGame(){
   document.getElementById('gameOverScreen').style.display='none';
 }
 
-function doDrink(){
+function feedTick(){
   if(!game.canDrink||game.state===State.BURST||game.state===State.GAME_OVER) return;
-  game.drinkCount++;
-  Sound.slurp();
-  // Enter DRINKING state for gulp animation
-  game.state=State.DRINKING;
-  game.drinkAnimTimer=24;
-  // Stream animation
+  // Increase fill level (fills in ~4 seconds at 60fps)
+  game.fillLevel=Math.min(1,game.fillLevel+0.0035);
+  game.drinkCount=Math.floor(game.fillLevel*15);
+  // Stream
   game.isStreaming=true;
-  game.streamProgress=0;
-  // Belly bounce
-  game.targetBellyScale=1.3;
-  // Head tilt (gulp)
-  game.headTilt=-0.2;
-  // Bottle animation
-  game.bottleAngle=0.25;
-  game.bottleSquash=0.65;
-  // +1
-  spawnPlusOne();
-  // Burp timer
-  game.burpTimer=15;
+  game.streamProgress=(game.streamProgress+0.025)%1;
+  // Belly pulse
+  game.targetBellyScale=1.06+Math.sin(game.gameTime*0.12)*0.04;
+  // Head tilt
+  game.headTilt=-0.1;
+  // Periodic slurp
+  if(game.gameTime%6===0) Sound.slurp();
+  // +1 every so often
+  if(game.gameTime%12===0) spawnPlusOne();
   // Check warning
-  if(game.drinkCount>10&&game.drinkCount<game.maxSafeDrinks){
+  if(game.fillLevel>0.67&&game.fillLevel<1&&!game.stopBubble.show){
     game.stopBubble.show=true;
     game.stopBubble.scale=0.01;
     Sound.warning();
   }
   // Check burst
-  if(game.drinkCount>=game.maxSafeDrinks){
+  if(game.fillLevel>=1){
     triggerBurst();
   }
 }
@@ -1336,6 +1338,13 @@ function update(){
   game.gameTime++;
   updateFlyingObjects();
 
+  // Continuous feeding while holding bottle
+  if(game.feeding){
+    feedTick();
+  }else if(game.isStreaming){
+    game.isStreaming=false;
+  }
+
   // Dog ROFL + laugh starts when belly is ~50% full
   const dogActive=game.drinkCount>=8;
   if(dogActive){
@@ -1397,7 +1406,7 @@ function update(){
   // Sweat drops
   if(game.state===State.WALKING||game.tongueOut||game.drinkCount>10){
     if(game.state===State.WALKING ? Math.random()<0.03 : Math.random()<0.05){
-  const bellyR=game.baseRadius+game.drinkCount*28;
+      const bellyR=game.baseRadius+game.fillLevel*400;
       game.sweatDrops.push({
         x:(Math.random()-0.5)*50,
         y:-bellyR*1.2-Math.random()*30,
@@ -1412,20 +1421,9 @@ function update(){
     }
   }
 
-  // DRINKING state - gulp animation
-  if(game.state===State.DRINKING){
-    game.drinkAnimTimer--;
-    // Throat bob: rapid head bob
-    game.headTilt=-0.2+Math.sin(game.gameTime*0.3)*0.06;
-    if(game.drinkAnimTimer<=0){
-      // Transition to appropriate state
-      if(game.drinkCount>10){
-        game.state=State.WARNING;
-      }else{
-        game.state=State.THIRSTY;
-      }
-      game.headTilt=-0.05;
-    }
+  // Continuous throat bob while feeding
+  if(game.feeding){
+    game.headTilt=-0.1+Math.sin(game.gameTime*0.2)*0.05;
   }
 
   // Belly scale elastic animation
@@ -1445,9 +1443,9 @@ function update(){
   if(game.bottleShake>0) game.bottleShake*=0.9;
   if(game.bottleShake<0.1) game.bottleShake=0;
 
-  // Stream animation
-  if(game.isStreaming){
-    game.streamProgress+=0.03;
+  // Stream animation (feedTick manages progress when feeding)
+  if(game.isStreaming&&!game.feeding){
+    game.streamProgress+=0.04;
     if(game.streamProgress>=1){
       game.isStreaming=false;
       game.streamProgress=0;
@@ -1456,6 +1454,9 @@ function update(){
 
   // Burp timer
   if(game.burpTimer>0) game.burpTimer--;
+
+  // Bottle vibrates while feeding
+  if(game.feeding) game.bottleShake=Math.max(game.bottleShake,2+Math.sin(game.gameTime*0.1)*1.5);
 
   // Warning state
   if(game.state===State.WARNING){
@@ -1501,8 +1502,7 @@ function update(){
     Sound.warning();
   }
 
-  // Click cooldown
-  if(clickCooldown>0) clickCooldown--;
+
 }
 
 // ===================== RENDER ========================================
@@ -1539,7 +1539,8 @@ function render(){
     ctx.fillStyle='#FFF';
     ctx.font=`bold ${H*0.025}px sans-serif`;
     ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.fillText(`🧃 ${game.drinkCount}/${game.maxSafeDrinks}`,W*0.03,H*0.045);
+    const pct=Math.round(game.fillLevel*100);
+    ctx.fillText(`🧃 ${pct}%`,W*0.03,H*0.045);
   }
 
   ctx.restore(); // screen shake
@@ -1574,19 +1575,27 @@ function isBottleHit(px,py){
   return px>=bx-bw&&px<=bx+bw&&py>=by-bh&&py<=by+bh;
 }
 
-let clickCooldown=0;
-function handleClick(e){
+function startFeed(e){
   e.preventDefault();
-  if(clickCooldown>0) return;
   const pos=getClickPos(e);
-  if(game.canDrink&&isBottleHit(pos.x,pos.y)){
-    clickCooldown=15;
-    doDrink();
+  if(game.canDrink&&isBottleHit(pos.x,pos.y)&&game.state!==State.BURST&&game.state!==State.GAME_OVER){
+    game.feeding=true;
+    game.bottleSquash=0.75;
   }
 }
-// Only use touchstart to avoid double-fire on mobile
-canvas.addEventListener('touchstart',handleClick,{passive:false});
-canvas.addEventListener('mousedown',handleClick);
+function stopFeed(e){
+  if(game.feeding){
+    game.feeding=false;
+    game.isStreaming=false;
+    game.bottleSquash=1;
+  }
+}
+canvas.addEventListener('touchstart',startFeed,{passive:false});
+canvas.addEventListener('touchend',stopFeed);
+canvas.addEventListener('touchcancel',stopFeed);
+canvas.addEventListener('mousedown',startFeed);
+canvas.addEventListener('mouseup',stopFeed);
+canvas.addEventListener('mouseleave',stopFeed);
 
 document.getElementById('playBtn').addEventListener('click',()=>{
   try{getAudioCtx()}catch(e){}

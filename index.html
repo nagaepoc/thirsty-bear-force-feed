@@ -39,7 +39,6 @@ canvas{display:block;width:100%;height:100%;cursor:pointer;position:relative;z-i
 <div id="gameOverScreen" class="overlay">
 <h1>BEAR GOES BOOM!</h1>
 <p class="sub">The bear couldn't handle your kindness...</p>
-<div class="stats" id="finalStats"></div>
 <button class="btn btn-restart" id="restartBtn">PLAY AGAIN</button>
 </div>
 <canvas id="gameCanvas"></canvas>
@@ -339,8 +338,9 @@ function dogCenterY(){
 }
 function bottleCenterX(){return W*0.85}
 function bottleCenterY(){
-  // Upper-mid right side, easy for thumb to hold
-  return H*0.42;
+  // Sitting on the sidewalk, just above the road
+  const bh=Math.min(W,H)*0.12;
+  return groundY() - bh * 0.35;
 }
 
 // ===================== DRAWING FUNCTIONS =============================
@@ -1314,7 +1314,6 @@ function triggerBurst(){
 function endGame(){
   game.state=State.GAME_OVER;
   const gos=document.getElementById('gameOverScreen');
-  document.getElementById('finalStats').textContent=`Total drinks: ${game.drinkCount} 🧃 | The bear went BOOM!`;
   gos.style.display='flex';
   gos.classList.add('show');
 }
@@ -1745,7 +1744,7 @@ function update(){
         }else{
           game.boomText.scale=1.35;
         }
-        if(t>45) game.boomText.alpha=Math.max(0,1-(t-45)/45);
+        if(t>250) game.boomText.alpha=Math.max(0,1-(t-250)/40);
       }
       // Bear collapses fast after anticipation
       if(t>6){
@@ -1759,7 +1758,7 @@ function update(){
     // More particles burst at frames 4, 10
     if(t===4) spawnBurstParticles();
     if(t===10) spawnBurstParticles();
-    if(t>75) endGame();
+    if(t>290) endGame();
     updateParticles();
   }
 
@@ -1797,9 +1796,9 @@ function render(){
   drawFlyingObjects();
   drawDog();
   drawStopBubble();
-  drawBoomText();
   drawParticles();
   drawBear();
+  drawBoomText();
   drawStream();
   drawBottle();
   drawPlusOnes();

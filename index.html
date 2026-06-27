@@ -356,11 +356,12 @@ function drawBackground(){
   ctx.strokeStyle='#FFA000';ctx.lineWidth=sunR*0.08;
   ctx.beginPath();ctx.arc(sunX,sunY+sunR*0.1,sunR*0.3,0.1,Math.PI-0.1);ctx.stroke();
   // Clouds
-  const cloudTime=game.gameTime*0.02;
-  drawCloud(W*0.1+cloudTime%W,W*0.12,Math.min(W,H)*0.04);
-  drawCloud(W*0.35+(cloudTime*0.7)%W,W*0.08,Math.min(W,H)*0.035);
-  drawCloud(W*0.6+(cloudTime*0.5)%W,W*0.15,Math.min(W,H)*0.05);
-  drawCloud(W*0.8+(cloudTime*0.3)%W,W*0.07,Math.min(W,H)*0.03);
+  const cloudTime=game.gameTime*0.015;
+  const cs=[{x:.08,y:.1,r:.04,s:.9},{x:.25,y:.06,r:.035,s:.7},{x:.42,y:.14,r:.05,s:.5},{x:.58,y:.05,r:.03,s:.8},
+            {x:.72,y:.12,r:.045,s:.4},{x:.88,y:.08,r:.035,s:.6},{x:.15,y:.18,r:.025,s:1.1},{x:.55,y:.2,r:.03,s:.3}];
+  for(const c of cs){
+    drawCloud(W*c.x+(cloudTime*c.s)%W,W*c.y,Math.min(W,H)*c.r);
+  }
   // Grass
   ctx.fillStyle='#66BB6A';
   ctx.fillRect(0,groundY()-H*0.02,W,H*0.02);
@@ -1127,9 +1128,110 @@ function endGame(){
   gos.classList.add('show');
 }
 
+// ===================== FLYING OBJECTS (Airplanes & Balloons) =========
+let flyingObjects=[];
+
+function initFlyingObjects(){
+  flyingObjects=[];
+  const count=6+Math.floor(Math.random()*3);
+  for(let i=0;i<count;i++){
+    if(i%2===0){
+      // Airplane (40% bigger)
+      const sz=(12+Math.random()*14)*1.4;
+      flyingObjects.push({
+        type:'plane',x:Math.random()*W,y:H*(0.05+Math.random()*0.2),
+        speed:0.8+Math.random()*1.5,size:sz,
+        body:'#E8E8E8',wing:'#B0B0B0',accent:['#E53935','#1E88E5','#43A047','#FB8C00'][i%4]
+      });
+    }else{
+      // Hot-air balloon
+      const sz=22+Math.random()*22;
+      const colors=[['#FF6B6B','#FF8E8E'],['#FFD93D','#FFE066'],['#6BCB77','#8EDB9A'],
+                    ['#4D96FF','#7AB8FF'],['#FF6B9D','#FF8DB5'],['#AB47BC','#CE93D8']];
+      const c=colors[i%colors.length];
+      flyingObjects.push({
+        type:'balloon',x:Math.random()*W,y:H*(0.08+Math.random()*0.35),
+        speedX:(Math.random()-0.5)*0.25,speedY:-0.15-Math.random()*0.25,
+        size:sz,color:c[0],secondary:c[1]
+      });
+    }
+  }
+}
+
+function drawPlane(o){
+  ctx.save();ctx.translate(o.x,o.y);
+  const s=o.size;
+  // Fuselage
+  ctx.fillStyle=o.body;ctx.strokeStyle='#999';ctx.lineWidth=1;
+  ctx.beginPath();ctx.ellipse(0,0,s*0.9,s*0.25,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  // Main wing
+  ctx.fillStyle=o.wing;ctx.strokeStyle='#888';ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.moveTo(-s*0.1,-s*0.05);ctx.lineTo(s*0.3,-s*0.45);ctx.lineTo(s*0.35,-s*0.35);ctx.lineTo(s*0.05,-s*0.02);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-s*0.1,s*0.05);ctx.lineTo(s*0.3,s*0.45);ctx.lineTo(s*0.35,s*0.35);ctx.lineTo(s*0.05,s*0.02);ctx.closePath();ctx.fill();ctx.stroke();
+  // Tail
+  ctx.beginPath();ctx.moveTo(-s*0.6,-s*0.02);ctx.lineTo(-s*0.75,-s*0.3);ctx.lineTo(-s*0.65,-s*0.3);ctx.lineTo(-s*0.55,-s*0.02);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(-s*0.6,s*0.02);ctx.lineTo(-s*0.75,s*0.25);ctx.lineTo(-s*0.65,s*0.25);ctx.lineTo(-s*0.55,s*0.02);ctx.closePath();ctx.fill();
+  // Accent stripe
+  ctx.strokeStyle=o.accent;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(-s*0.5,0);ctx.lineTo(s*0.4,0);ctx.stroke();
+  // Window
+  ctx.fillStyle='#B3E5FC';ctx.strokeStyle='#666';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.arc(s*0.15,0,s*0.07,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.arc(s*0.3,0,s*0.05,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.restore();
+}
+
+function drawBalloon(o){
+  ctx.save();ctx.translate(o.x,o.y);
+  const s=o.size;
+  // Balloon envelope
+  const grad=ctx.createRadialGradient(-s*0.25,-s*0.4,0,0,-s*0.1,s*0.9);
+  grad.addColorStop(0,o.secondary);grad.addColorStop(1,o.color);
+  ctx.fillStyle=grad;ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.ellipse(0,-s*0.15,s*0.85,s,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  // Decorative stripes
+  ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(-s*0.3,-s*0.6);ctx.lineTo(s*0.3,-s*0.6);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-s*0.5,-s*0.15);ctx.lineTo(s*0.5,-s*0.15);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-s*0.3,s*0.3);ctx.lineTo(s*0.3,s*0.3);ctx.stroke();
+  // Ropes
+  ctx.strokeStyle='#6D4C41';ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(-s*0.35,s*0.7);ctx.lineTo(-s*0.15,s*1.2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(s*0.35,s*0.7);ctx.lineTo(s*0.15,s*1.2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,s*0.75);ctx.lineTo(0,s*1.2);ctx.stroke();
+  // Basket
+  ctx.fillStyle='#8D6E63';ctx.strokeStyle='#5D4037';ctx.lineWidth=1;
+  ctx.fillRect(-s*0.18,s*1.2,s*0.36,s*0.2);ctx.strokeRect(-s*0.18,s*1.2,s*0.36,s*0.2);
+  ctx.fillStyle='#6D4C41';
+  ctx.fillRect(-s*0.18,s*1.2,s*0.36,s*0.04);
+  ctx.restore();
+}
+
+function updateFlyingObjects(){
+  for(const o of flyingObjects){
+    if(o.type==='plane'){
+      o.x+=o.speed;
+      if(o.x>W+o.size*2) o.x=-o.size*2;
+    }else{
+      o.x+=o.speedX;o.y+=o.speedY;
+      if(o.y<-o.size*2) o.y=groundY()-o.size*2;
+      if(o.x<-o.size*2) o.x=W+o.size*2;
+      if(o.x>W+o.size*2) o.x=-o.size*2;
+    }
+  }
+}
+
+function drawFlyingObjects(){
+  for(const o of flyingObjects){
+    if(o.type==='plane') drawPlane(o);
+    else drawBalloon(o);
+  }
+}
+
 // ===================== UPDATE ========================================
 function update(){
   game.gameTime++;
+  updateFlyingObjects();
 
   // Dog ROFL + laugh starts when belly is ~50% full
   const dogActive=game.drinkCount>=8;
@@ -1313,6 +1415,7 @@ function render(){
   }
 
   drawBackground();
+  drawFlyingObjects();
   drawDog();
   drawStopBubble();
   drawBoomText();
@@ -1394,6 +1497,7 @@ document.getElementById('restartBtn').addEventListener('click',()=>{
 // Proper resize handler that updates character positions
 function onResize(){
   resize();
+  initFlyingObjects();
   if(typeof game !== 'undefined' && game.state!==State.START&&game.state!==State.WALKING){
     game.bearY=bearCenterY();
     game.targetX=bearCenterX();
@@ -1408,6 +1512,7 @@ onResize();
 game.bearY=bearCenterY();
 game.targetX=bearCenterX();
 
+initFlyingObjects();
 gameLoop();
 </script>
 </body>

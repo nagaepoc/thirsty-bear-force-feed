@@ -1081,8 +1081,8 @@ function startGame(){
 
 function feedTick(){
   if(!game.canDrink||game.state===State.BURST||game.state===State.GAME_OVER) return;
-  // Increase fill level (fills in ~4 seconds at 60fps)
-  game.fillLevel=Math.min(1,game.fillLevel+0.0035);
+  // Slow feed rate (~14 seconds to fill at 60fps)
+  game.fillLevel=Math.min(1,game.fillLevel+0.0012);
   game.drinkCount=Math.floor(game.fillLevel*15);
   // Stream
   game.isStreaming=true;
@@ -1343,6 +1343,17 @@ function update(){
     feedTick();
   }else if(game.isStreaming){
     game.isStreaming=false;
+  }
+
+  // Belly slowly deflates when not feeding (only after feeding has started)
+  if(!game.feeding && game.canDrink && game.fillLevel>0 && game.state!==State.BURST && game.state!==State.GAME_OVER){
+    game.fillLevel=Math.max(0,game.fillLevel-0.0005);
+    game.drinkCount=Math.floor(game.fillLevel*15);
+    // Clear warning if fill drops below threshold
+    if(game.fillLevel<=0.65 && game.stopBubble.show){
+      game.stopBubble.show=false;
+      game.state=State.THIRSTY;
+    }
   }
 
   // Dog ROFL + laugh starts when belly is ~50% full

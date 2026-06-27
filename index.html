@@ -239,6 +239,20 @@ const Sound={
       osc.connect(gain);gain.connect(ac.destination);
       osc.start(ac.currentTime+0.1);osc.stop(ac.currentTime+0.7);
     }catch(e){}
+  },
+  pop(){
+    try{
+      const ac=getAudioCtx();
+      const osc=ac.createOscillator();
+      const gain=ac.createGain();
+      osc.type='sine';
+      osc.frequency.setValueAtTime(1200,ac.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(300,ac.currentTime+0.12);
+      gain.gain.setValueAtTime(0.2,ac.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.1);
+      osc.connect(gain);gain.connect(ac.destination);
+      osc.start();osc.stop(ac.currentTime+0.12);
+    }catch(e){}
   }
 };
 
@@ -936,6 +950,78 @@ function spawnBurstParticles(){
       type:Math.random()>0.4?'fur':'juice'
     });
   }
+}
+
+// ----- Pop Particles (for clicking background objects) -----
+let popParticles=[];
+
+function spawnPop(x,y){
+  const colors=['#FFD600','#FF6F00','#FF1744','#00E5FF','#76FF03','#D500F9','#FFF'];
+  for(let i=0;i<12;i++){
+    const a=Math.random()*Math.PI*2;
+    const sp=1+Math.random()*3;
+    popParticles.push({
+      x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1,
+      life:1,decay:0.025+Math.random()*0.025,
+      size:2+Math.random()*5,
+      color:colors[Math.floor(Math.random()*colors.length)]
+    });
+  }
+}
+
+function updatePopParticles(){
+  for(let i=popParticles.length-1;i>=0;i--){
+    const p=popParticles[i];
+    p.x+=p.vx;p.y+=p.vy;p.vy+=0.1;
+    p.life-=p.decay;
+    if(p.life<=0) popParticles.splice(i,1);
+  }
+}
+
+function drawPopParticles(){
+  for(const p of popParticles){
+    ctx.save();ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ----- Object hit detection & respawn -----
+function hitFlyingObject(px,py){
+  for(let i=0;i<flyingObjects.length;i++){
+    const o=flyingObjects[i];
+    const hitR=o.size*1.8;
+    if(Math.abs(px-o.x)<hitR&&Math.abs(py-o.y)<hitR){
+      spawnPop(o.x,o.y);
+      Sound.pop();
+      // Respawn same type at new random position
+      if(o.type==='plane'){
+        o.x=-o.size*2;o.y=H*(0.03+Math.random()*0.22);
+        o.speed=0.8+Math.random()*1.5;
+        o.size=(12+Math.random()*14)*1.4;
+        o.body='#E8E8E8';o.wing='#B0B0B0';
+        o.accent=['#E53935','#1E88E5','#43A047','#FB8C00'][Math.floor(Math.random()*4)];
+      }else if(o.type==='car'){
+        o.x=-o.size*2;o.y=groundY()+H*(0.01+Math.random()*0.04);
+        o.speed=0.6+Math.random()*1.8;o.size=12+Math.random()*10;
+        const carColors=['#D32F2F','#1976D2','#388E3C','#F57C00','#7B1FA2','#616161','#FDD835','#00796B'];
+        const roofs=['#B71C1C','#0D47A1','#1B5E20','#E65100','#4A148C','#424242','#F9A825','#004D40'];
+        const ci=Math.floor(Math.random()*carColors.length);
+        o.body=carColors[ci];o.roof=roofs[ci];
+      }else{ // balloon
+        o.x=-o.size*2;o.y=H*(0.08+Math.random()*0.35);
+        o.speedX=(Math.random()-0.5)*0.25;o.speedY=-0.15-Math.random()*0.25;
+        o.size=22+Math.random()*22;
+        const pal=[['#FF6B6B','#FF8E8E'],['#FFD93D','#FFE066'],['#6BCB77','#8EDB9A'],
+                  ['#4D96FF','#7AB8FF'],['#FF6B9D','#FF8DB5'],['#AB47BC','#CE93D8']];
+        const c=pal[Math.floor(Math.random()*pal.length)];
+        o.color=c[0];o.secondary=c[1];
+      }
+      return true;
+    }
+  }
+  return false;
 }
 
 // ----- +1 Floating Text -----
@@ -1637,7 +1723,8 @@ function update(){
     Sound.warning();
   }
 
-
+  // Pop particles
+  updatePopParticles();
 }
 
 // ===================== RENDER ========================================
@@ -1664,6 +1751,7 @@ function render(){
   drawBottle();
   drawPlusOnes();
   drawIntroBubble();
+  drawPopParticles();
   drawPrompt();
 
   // Drink counter
@@ -1719,6 +1807,9 @@ function isBottleHit(px,py){
 function startFeed(e){
   e.preventDefault();
   const pos=getClickPos(e);
+  // Check flying objects first (always interactive)
+  if(hitFlyingObject(pos.x,pos.y)) return;
+  // Then check bottle for feeding
   if(game.canDrink&&isBottleHit(pos.x,pos.y)&&game.state!==State.BURST&&game.state!==State.GAME_OVER){
     game.feeding=true;
     game.bottleSquash=0.75;

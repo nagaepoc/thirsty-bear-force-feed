@@ -382,13 +382,6 @@ function drawBackground(){
   ctx.beginPath();ctx.arc(sunX+sR*0.25,sunY-sR*0.15,blink,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle='#FFA000';ctx.lineWidth=sR*0.07;
   ctx.beginPath();ctx.arc(sunX,sunY+sR*0.1,sR*smileSize,0.15,Math.PI-0.15);ctx.stroke();
-  // Clouds
-  const cloudTime=game.gameTime*0.015;
-  const cs=[{x:.08,y:.1,r:.04,s:.9},{x:.25,y:.06,r:.035,s:.7},{x:.42,y:.14,r:.05,s:.5},{x:.58,y:.05,r:.03,s:.8},
-            {x:.72,y:.12,r:.045,s:.4},{x:.88,y:.08,r:.035,s:.6},{x:.15,y:.18,r:.025,s:1.1},{x:.55,y:.2,r:.03,s:.3}];
-  for(const c of cs){
-    drawCloud(W*c.x+(cloudTime*c.s)%W,W*c.y,Math.min(W,H)*c.r);
-  }
   // Grass
   ctx.fillStyle='#66BB6A';
   ctx.fillRect(0,groundY()-H*0.02,W,H*0.02);
@@ -433,13 +426,14 @@ function drawBottle(){
   glowGrad.addColorStop(0.5,`rgba(255,200,50,${(glowBase+glowAmp*glowPulse)*0.3})`);
   glowGrad.addColorStop(1,'rgba(255,200,50,0)');
   ctx.fillStyle=glowGrad;ctx.beginPath();ctx.arc(bx,by,bh*1.5,0,Math.PI*2);ctx.fill();
-  // Bottle
+  // Bottle — pivot from bottom (where finger holds)
   ctx.save();
-  ctx.translate(bx,by);
+  ctx.translate(bx,by+bh*0.4);
   if(game.bottleShake>0){
     ctx.translate((Math.random()-0.5)*game.bottleShake,(Math.random()-0.5)*game.bottleShake);
   }
   ctx.rotate(game.bottleAngle);
+  ctx.translate(0,-bh*0.4);
   ctx.scale(1,game.bottleSquash);
   // Water level indicator (inside bottle)
   const fillH=bh*0.45*game.fillLevel;
@@ -998,23 +992,33 @@ function hitFlyingObject(px,py){
       // Respawn same type at new random position
       if(o.type==='plane'){
         o.x=-o.size*2;o.y=H*(0.03+Math.random()*0.22);
-        o.speed=0.8+Math.random()*1.5;
-        o.size=(12+Math.random()*14)*1.4;
+        o.speed=0.5+Math.random()*1.2;
+        o.size=(18+Math.random()*18)*1.5;
         o.body='#E8E8E8';o.wing='#B0B0B0';
         o.accent=['#E53935','#1E88E5','#43A047','#FB8C00'][Math.floor(Math.random()*4)];
       }else if(o.type==='car'){
         o.x=-o.size*2;o.y=groundY()+H*(0.01+Math.random()*0.04);
-        o.speed=0.6+Math.random()*1.8;o.size=12+Math.random()*10;
+        o.speed=0.5+Math.random()*1.5;o.size=22+Math.random()*14;
         const carColors=['#D32F2F','#1976D2','#388E3C','#F57C00','#7B1FA2','#616161','#FDD835','#00796B'];
         const roofs=['#B71C1C','#0D47A1','#1B5E20','#E65100','#4A148C','#424242','#F9A825','#004D40'];
         const ci=Math.floor(Math.random()*carColors.length);
         o.body=carColors[ci];o.roof=roofs[ci];
+      }else if(o.type==='cloud'){
+        o.x=-o.size*2;o.y=H*(0.03+Math.random()*0.27);
+        o.speed=(Math.random()>0.4?1:-1)*(0.1+Math.random()*0.4);
+        o.size=Math.min(W,H)*(0.02+Math.random()*0.04);
+      }else if(o.type==='bird'){
+        o.x=-o.size*2;o.y=H*(0.05+Math.random()*0.23);
+        o.speed=(Math.random()>0.5?1:-1)*(0.8+Math.random()*1);
+        o.size=14+Math.random()*8;
+        o.color=['#333','#555','#222','#444'][Math.floor(Math.random()*4)];
       }else{ // balloon
-        o.x=-o.size*2;o.y=H*(0.08+Math.random()*0.35);
-        o.speedX=(Math.random()-0.5)*0.25;o.speedY=-0.15-Math.random()*0.25;
-        o.size=22+Math.random()*22;
+        o.x=-o.size*2;o.y=H*(0.05+Math.random()*0.4);
+        o.speedX=(Math.random()-0.5)*0.7;o.speedY=-(0.1+Math.random()*0.3);
+        o.size=18+Math.random()*24;
         const pal=[['#FF6B6B','#FF8E8E'],['#FFD93D','#FFE066'],['#6BCB77','#8EDB9A'],
-                  ['#4D96FF','#7AB8FF'],['#FF6B9D','#FF8DB5'],['#AB47BC','#CE93D8']];
+                  ['#4D96FF','#7AB8FF'],['#FF6B9D','#FF8DB5'],['#AB47BC','#CE93D8'],
+                  ['#FF8A65','#FFAB91'],['#80CBC4','#A5D6A7']];
         const c=pal[Math.floor(Math.random()*pal.length)];
         o.color=c[0];o.secondary=c[1];
       }
@@ -1062,10 +1066,11 @@ function drawPlusOnes(){
 function drawStream(){
   if(!game.isStreaming) return;
   const bh=Math.min(W,H)*0.12;
-  const startX=bottleCenterX(),startY=bottleCenterY()-bh*0.65;
+  const bx=bottleCenterX(),by=bottleCenterY();
+  // Stream origin follows bottle cap (which tilts toward bear when feeding)
+  const startX=bx+(game.feeding?Math.sin(game.bottleAngle)*bh*0.85:0);
+  const startY=by-(game.feeding?Math.cos(game.bottleAngle)*bh*0.85:bh*0.65);
   const endX=game.bearX,endY=game.bearY-H*0.35;
-  // Bottle tilt animation while feeding
-  if(game.feeding) game.bottleAngle=0.15+Math.sin(game.gameTime*0.06)*0.1;
   const progress=game.streamProgress;
 
   ctx.save();
@@ -1259,6 +1264,8 @@ function startGame(){
 
 function feedTick(){
   if(!game.canDrink||game.state===State.BURST||game.state===State.GAME_OVER) return;
+  // Tilt bottle horizontal toward bear (-86°, pivot from bottom)
+  game.bottleAngle=-1.5+Math.sin(game.gameTime*0.05)*0.06;
   // Slow feed rate (~14 seconds to fill at 60fps)
   game.fillLevel=Math.min(1,game.fillLevel+0.0012);
   game.drinkCount=Math.floor(game.fillLevel*15);
@@ -1317,37 +1324,51 @@ let flyingObjects=[];
 
 function initFlyingObjects(){
   flyingObjects=[];
-  // Airplanes & balloons in sky
-  const count=6+Math.floor(Math.random()*3);
-  for(let i=0;i<count;i++){
-    if(i%2===0){
-      const sz=(12+Math.random()*14)*1.4;
-      flyingObjects.push({
-        type:'plane',x:Math.random()*W,y:H*(0.03+Math.random()*0.22),
-        speed:0.8+Math.random()*1.5,size:sz,
-        body:'#E8E8E8',wing:'#B0B0B0',accent:['#E53935','#1E88E5','#43A047','#FB8C00'][i%4]
-      });
-    }else{
-      const sz=22+Math.random()*22;
-      const colors=[['#FF6B6B','#FF8E8E'],['#FFD93D','#FFE066'],['#6BCB77','#8EDB9A'],
-                    ['#4D96FF','#7AB8FF'],['#FF6B9D','#FF8DB5'],['#AB47BC','#CE93D8']];
-      const c=colors[i%colors.length];
-      flyingObjects.push({
-        type:'balloon',x:Math.random()*W,y:H*(0.08+Math.random()*0.35),
-        speedX:(Math.random()-0.5)*0.25,speedY:-0.15-Math.random()*0.25,
-        size:sz,color:c[0],secondary:c[1]
-      });
-    }
+  const r=(m,M)=>m+Math.random()*(M-m);
+  // Clouds (scattered, varied speeds/directions)
+  for(let i=0;i<9;i++){
+    const sz=Math.min(W,H)*r(0.02,0.06);
+    flyingObjects.push({
+      type:'cloud',x:Math.random()*W,y:H*r(0.03,0.3),
+      speed:(Math.random()>0.4?1:-1)*r(0.1,0.5),size:sz
+    });
   }
-  // Cars on the road
-  const carCount=3+Math.floor(Math.random()*2);
+  // Birds (moderate speed)
+  for(let i=0;i<5;i++){
+    flyingObjects.push({
+      type:'bird',x:Math.random()*W,y:H*r(0.05,0.28),
+      speed:(Math.random()>0.5?1:-1)*r(0.8,1.8),size:r(14,22),
+      color:['#333','#555','#222','#444'][i%4]
+    });
+  }
+  // Airplanes (bigger)
+  for(let i=0;i<4;i++){
+    flyingObjects.push({
+      type:'plane',x:Math.random()*W,y:H*r(0.03,0.2),
+      speed:r(0.5,1.5),size:(18+Math.random()*18)*1.5,
+      body:'#E8E8E8',wing:'#B0B0B0',
+      accent:['#E53935','#1E88E5','#43A047','#FB8C00'][i%4]
+    });
+  }
+  // Hot-air balloons (scattered across full sky width, varied Y)
+  const palettes=[['#FF6B6B','#FF8E8E'],['#FFD93D','#FFE066'],['#6BCB77','#8EDB9A'],
+                  ['#4D96FF','#7AB8FF'],['#FF6B9D','#FF8DB5'],['#AB47BC','#CE93D8'],
+                  ['#FF8A65','#FFAB91'],['#80CBC4','#A5D6A7']];
+  for(let i=0;i<8;i++){
+    const c=palettes[i%palettes.length];
+    flyingObjects.push({
+      type:'balloon',x:Math.random()*W,y:H*r(0.05,0.45),
+      speedX:r(-0.35,0.35),speedY:r(-0.4,-0.1),size:r(18,42),
+      color:c[0],secondary:c[1]
+    });
+  }
+  // Cars on the road (big)
   const carColors=['#D32F2F','#1976D2','#388E3C','#F57C00','#7B1FA2','#616161','#FDD835','#00796B'];
-  for(let i=0;i<carCount;i++){
-    const sz=12+Math.random()*10;
+  for(let i=0;i<7;i++){
     flyingObjects.push({
       type:'car',x:Math.random()*W,
-      y:groundY()+H*(0.01+Math.random()*0.04),
-      speed:0.6+Math.random()*1.8,size:sz,
+      y:groundY()+H*r(0.005,0.045),
+      speed:r(0.5,1.8),size:r(22,36),
       body:carColors[i%carColors.length],
       roof:['#B71C1C','#0D47A1','#1B5E20','#E65100','#4A148C','#424242','#F9A825','#004D40'][i%carColors.length]
     });
@@ -1435,15 +1456,44 @@ function drawCar(o){
   ctx.restore();
 }
 
+function drawCloudObj(o){
+  ctx.save();ctx.translate(o.x,o.y);
+  const s=o.size;
+  ctx.fillStyle='rgba(255,255,255,0.85)';
+  ctx.beginPath();ctx.arc(0,0,s*0.6,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.45,-s*0.08,s*0.45,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.9,0,s*0.4,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.4,s*0.2,s*0.35,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawBird(o){
+  ctx.save();ctx.translate(o.x,o.y);
+  const s=o.size;
+  const flap=Math.sin(game.gameTime*0.08+o.x)*0.3;
+  ctx.strokeStyle=o.color;ctx.lineWidth=2;ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.8,flap*s*0.3);ctx.quadraticCurveTo(-s*0.2,0,0,-s*0.2);
+  ctx.quadraticCurveTo(s*0.2,0,s*0.8,flap*s*0.3);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function updateFlyingObjects(){
   for(const o of flyingObjects){
-    if(o.type==='plane'){
+    if(o.type==='cloud'){
+      o.x+=o.speed;
+      if(o.x>W+o.size*2) o.x=-o.size*2;
+    }else if(o.type==='bird'){
+      o.x+=o.speed;
+      if(o.x>W+o.size*2) o.x=-o.size*2;
+    }else if(o.type==='plane'){
       o.x+=o.speed;
       if(o.x>W+o.size*2) o.x=-o.size*2;
     }else if(o.type==='car'){
       o.x+=o.speed;
       if(o.x>W+o.size*2) o.x=-o.size*2;
-    }else{
+    }else{ // balloon
       o.x+=o.speedX;o.y+=o.speedY;
       if(o.y<-o.size*2) o.y=groundY()-o.size*2;
       if(o.x<-o.size*2) o.x=W+o.size*2;
@@ -1453,11 +1503,14 @@ function updateFlyingObjects(){
 }
 
 function drawFlyingObjects(){
-  // Draw sky objects first, then cars on top (further down = closer to viewer)
+  // Sky objects (back to front)
   for(const o of flyingObjects){
-    if(o.type==='plane') drawPlane(o);
+    if(o.type==='cloud') drawCloudObj(o);
+    else if(o.type==='bird') drawBird(o);
+    else if(o.type==='plane') drawPlane(o);
     else if(o.type==='balloon') drawBalloon(o);
   }
+  // Cars on road (on top of everything else)
   for(const o of flyingObjects){
     if(o.type==='car') drawCar(o);
   }
@@ -1636,9 +1689,9 @@ function update(){
   if(game.headTilt<0) game.headTilt+=0.01;
   if(game.headTilt>0) game.headTilt=0;
 
-  // Bottle recovery
-  if(game.bottleAngle>0) game.bottleAngle*=0.92;
-  if(game.bottleAngle<0.001) game.bottleAngle=0;
+  // Bottle recovery (only when not feeding)
+  if(!game.feeding&&Math.abs(game.bottleAngle)>0.01) game.bottleAngle*=0.9;
+  else if(!game.feeding) game.bottleAngle=0;
   if(game.bottleSquash<1) game.bottleSquash+=(1-game.bottleSquash)*0.12;
 
   // Bottle shake

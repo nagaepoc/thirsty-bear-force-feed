@@ -323,11 +323,10 @@ function dogCenterY(){
   // Sitting puppy's bottom is at ground level
   return groundY();
 }
-function bottleCenterX(){return W*0.5}
+function bottleCenterX(){return W*0.85}
 function bottleCenterY(){
-  // Bottle body bottom = by - bh*0.05, need on ground
-  const bh=Math.min(W,H)*0.04;
-  return groundY() + bh * 0.05;
+  // Upper-mid right side, easy for thumb to hold
+  return H*0.42;
 }
 
 // ===================== DRAWING FUNCTIONS =============================
@@ -340,20 +339,35 @@ function drawBackground(){
   sky.addColorStop(0.5,'#81D4FA');
   sky.addColorStop(1,'#B3E5FC');
   ctx.fillStyle=sky;ctx.fillRect(0,0,W,groundY());
-  // Sun
-  const sunX=W*0.85,sunY=H*0.1,sunR=Math.min(W,H)*0.06;
-  const sunGrad=ctx.createRadialGradient(sunX,sunY,0,sunX,sunY,sunR*2);
-  sunGrad.addColorStop(0,'rgba(255,255,0,0.4)');
-  sunGrad.addColorStop(0.5,'rgba(255,200,0,0.15)');
+  // Sun (animated, bigger)
+  const sunX=W*0.85,sunY=H*0.1,sunR=Math.min(W,H)*0.09;
+  const sunPulse=1+Math.sin(game.gameTime*0.015)*0.06;
+  const sR=sunR*sunPulse;
+  // Glow
+  const sunGrad=ctx.createRadialGradient(sunX,sunY,0,sunX,sunY,sR*2.5);
+  sunGrad.addColorStop(0,'rgba(255,255,0,0.35)');
+  sunGrad.addColorStop(0.4,'rgba(255,200,0,0.12)');
   sunGrad.addColorStop(1,'rgba(255,200,0,0)');
-  ctx.fillStyle=sunGrad;ctx.beginPath();ctx.arc(sunX,sunY,sunR*2,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#FFD700';ctx.beginPath();ctx.arc(sunX,sunY,sunR,0,Math.PI*2);ctx.fill();
-  // Sun face
+  ctx.fillStyle=sunGrad;ctx.beginPath();ctx.arc(sunX,sunY,sR*2.5,0,Math.PI*2);ctx.fill();
+  // Rotating rays
+  const rayAngle=game.gameTime*0.008;
+  ctx.strokeStyle='rgba(255,200,50,0.25)';ctx.lineWidth=2.5;
+  for(let i=0;i<12;i++){
+    const a=rayAngle+i*Math.PI/6;
+    ctx.beginPath();ctx.moveTo(sunX+Math.cos(a)*sR*1.1,sunY+Math.sin(a)*sR*1.1);
+    ctx.lineTo(sunX+Math.cos(a)*sR*1.6,sunY+Math.sin(a)*sR*1.6);
+    ctx.stroke();
+  }
+  // Sun body
+  ctx.fillStyle='#FFD700';ctx.beginPath();ctx.arc(sunX,sunY,sR,0,Math.PI*2);ctx.fill();
+  // Sun face (subtle animation)
+  const blink=Math.sin(game.gameTime*0.04)>0.95?0.02:sR*0.08;
+  const smileSize=0.25+Math.sin(game.gameTime*0.02)*0.06;
   ctx.fillStyle='#FFA000';
-  ctx.beginPath();ctx.arc(sunX-sunR*0.25,sunY-sunR*0.15,sunR*0.08,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(sunX+sunR*0.25,sunY-sunR*0.15,sunR*0.08,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle='#FFA000';ctx.lineWidth=sunR*0.08;
-  ctx.beginPath();ctx.arc(sunX,sunY+sunR*0.1,sunR*0.3,0.1,Math.PI-0.1);ctx.stroke();
+  ctx.beginPath();ctx.arc(sunX-sR*0.25,sunY-sR*0.15,blink,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(sunX+sR*0.25,sunY-sR*0.15,blink,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#FFA000';ctx.lineWidth=sR*0.07;
+  ctx.beginPath();ctx.arc(sunX,sunY+sR*0.1,sR*smileSize,0.15,Math.PI-0.15);ctx.stroke();
   // Clouds
   const cloudTime=game.gameTime*0.015;
   const cs=[{x:.08,y:.1,r:.04,s:.9},{x:.25,y:.06,r:.035,s:.7},{x:.42,y:.14,r:.05,s:.5},{x:.58,y:.05,r:.03,s:.8},
@@ -395,17 +409,17 @@ function drawCloud(x,y,r){
 // ----- Bottle -----
 function drawBottle(){
   const bx=bottleCenterX(),by=bottleCenterY();
-  const bw=Math.min(W,H)*0.04,bh=Math.min(W,H)*0.08;
+  const bw=Math.min(W,H)*0.055,bh=Math.min(W,H)*0.12;
   // Pulsing glow (brighter when feeding)
   const glowPulse=0.5+0.5*Math.sin(game.gameTime*0.003);
   const glowBase=game.feeding?0.5:0.2;
   const glowAmp=game.feeding?0.3:0.15;
-  const glowGrad=ctx.createRadialGradient(bx,by-bh*0.3,0,bx,by-bh*0.3,bh*1.8);
+  const glowGrad=ctx.createRadialGradient(bx,by,0,bx,by,bh*1.5);
   glowGrad.addColorStop(0,`rgba(255,200,50,${glowBase+glowAmp*glowPulse})`);
-  glowGrad.addColorStop(0.5,`rgba(255,200,50,${(glowBase+glowAmp*glowPulse)*0.4})`);
+  glowGrad.addColorStop(0.5,`rgba(255,200,50,${(glowBase+glowAmp*glowPulse)*0.3})`);
   glowGrad.addColorStop(1,'rgba(255,200,50,0)');
-  ctx.fillStyle=glowGrad;ctx.beginPath();ctx.arc(bx,by-bh*0.3,bh*1.8,0,Math.PI*2);ctx.fill();
-  // Bottle body
+  ctx.fillStyle=glowGrad;ctx.beginPath();ctx.arc(bx,by,bh*1.5,0,Math.PI*2);ctx.fill();
+  // Bottle
   ctx.save();
   ctx.translate(bx,by);
   if(game.bottleShake>0){
@@ -413,25 +427,45 @@ function drawBottle(){
   }
   ctx.rotate(game.bottleAngle);
   ctx.scale(1,game.bottleSquash);
+  // Water level indicator (inside bottle)
+  const fillH=bh*0.45*game.fillLevel;
+  if(game.fillLevel>0){
+    ctx.fillStyle='rgba(100,180,255,0.35)';
+    roundRect(ctx,-bw*0.42,-bh*0.1-fillH,bw*0.84,fillH,3);ctx.fill();
+  }
   // Bottle cap
-  ctx.fillStyle='#C62828';ctx.strokeStyle='#8E0000';ctx.lineWidth=2;
-  roundRect(ctx,-bw*0.35,-bh*0.85,bw*0.7,bh*0.12,3);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#1565C0';ctx.strokeStyle='#0D47A1';ctx.lineWidth=2;
+  roundRect(ctx,-bw*0.32,-bh*0.88,bw*0.64,bh*0.1,4);ctx.fill();ctx.stroke();
   // Bottle neck
-  ctx.fillStyle='#FF8A80';ctx.strokeStyle='#D50000';ctx.lineWidth=1.5;
-  roundRect(ctx,-bw*0.25,-bh*0.7,bw*0.5,bh*0.15,2);ctx.fill();ctx.stroke();
-  // Bottle body
-  ctx.fillStyle='#FF5252';ctx.strokeStyle='#D50000';ctx.lineWidth=1.5;
-  roundRect(ctx,-bw*0.5,-bh*0.55,bw,bh*0.5,5);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#42A5F5';ctx.strokeStyle='#1E88E5';ctx.lineWidth=1.5;
+  roundRect(ctx,-bw*0.22,-bh*0.75,bw*0.44,bh*0.14,3);ctx.fill();ctx.stroke();
+  // Bottle shoulder
+  ctx.fillStyle='#64B5F6';
+  ctx.beginPath();ctx.moveTo(-bw*0.22,-bh*0.6);ctx.lineTo(-bw*0.45,-bh*0.4);ctx.lineTo(bw*0.45,-bh*0.4);ctx.lineTo(bw*0.22,-bh*0.6);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#1E88E5';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(-bw*0.22,-bh*0.6);ctx.lineTo(-bw*0.45,-bh*0.4);ctx.lineTo(bw*0.45,-bh*0.4);ctx.lineTo(bw*0.22,-bh*0.6);ctx.closePath();ctx.stroke();
+  // Bottle body (wider, rounded bottom)
+  ctx.fillStyle='#64B5F6';ctx.strokeStyle='#1E88E5';ctx.lineWidth=1.5;
+  ctx.beginPath();
+  ctx.moveTo(-bw*0.45,-bh*0.4);
+  ctx.lineTo(-bw*0.45,bh*0.15);
+  ctx.quadraticCurveTo(-bw*0.45,bh*0.35,-bw*0.25,bh*0.35);
+  ctx.lineTo(bw*0.25,bh*0.35);
+  ctx.quadraticCurveTo(bw*0.45,bh*0.35,bw*0.45,bh*0.15);
+  ctx.lineTo(bw*0.45,-bh*0.4);
+  ctx.closePath();ctx.fill();ctx.stroke();
   // Label
-  ctx.fillStyle='#FFF';
-  roundRect(ctx,-bw*0.35,-bh*0.35,bw*0.7,bh*0.18,2);
-  ctx.fill();
-  ctx.fillStyle='#D32F2F';ctx.font=`bold ${bw*0.3}px sans-serif`;ctx.textAlign='center';
-  ctx.fillText('H2O',0,-bh*0.25);
-  // Highlight
-  ctx.fillStyle='rgba(255,255,255,0.3)';
-  roundRect(ctx,-bw*0.35,-bh*0.5,bw*0.15,bh*0.35,3);
-  ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.9)';
+  roundRect(ctx,-bw*0.34,-bh*0.1,bw*0.68,bh*0.25,4);ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+  roundRect(ctx,-bw*0.34,-bh*0.1,bw*0.68,bh*0.25,4);ctx.stroke();
+  ctx.fillStyle='#1565C0';ctx.font=`bold ${bw*0.25}px sans-serif`;ctx.textAlign='center';
+  ctx.fillText('💧',0,-bh*0.02);
+  ctx.fillStyle='#0D47A1';ctx.font=`bold ${bw*0.18}px sans-serif`;
+  ctx.fillText('WATER',0,bh*0.08);
+  // Highlight on body
+  ctx.fillStyle='rgba(255,255,255,0.25)';
+  roundRect(ctx,-bw*0.32,-bh*0.35,bw*0.1,bh*0.35,3);ctx.fill();
   ctx.restore();
 }
 
@@ -662,47 +696,47 @@ function drawDog(){
   ctx.translate(wiggle,-bounce);
 
   // Tail (wagging rapidly)
-  ctx.strokeStyle='#A67B5B';ctx.lineWidth=s*0.16;ctx.lineCap='round';
+  ctx.strokeStyle='#D4A574';ctx.lineWidth=s*0.16;ctx.lineCap='round';
   const tailWag=Math.sin(laughPhase*3)*0.5;
   ctx.beginPath();ctx.moveTo(-s*0.3,-s*0.4);
   ctx.quadraticCurveTo(-s*0.5-tailWag*s,-s*0.9,-s*0.3-tailWag*s,-s*1.2);
   ctx.stroke();
 
   // Back legs (sitting)
-  ctx.fillStyle='#A67B5B';
+  ctx.fillStyle='#C97B5D';
   ctx.beginPath();ctx.ellipse(-s*0.3,s*0.05,s*0.18,s*0.12,0,0,Math.PI*2);ctx.fill();
   ctx.beginPath();ctx.ellipse(s*0.3,s*0.05,s*0.18,s*0.12,0,0,Math.PI*2);ctx.fill();
 
   // Body (sitting upright — oval tapering to bottom)
-  ctx.fillStyle='#C4956A';
+  ctx.fillStyle='#E8A87C';
   ctx.beginPath();ctx.ellipse(0,-s*0.5,s*0.55,s*0.5,0,0,Math.PI*2);ctx.fill();
   // Belly patch
-  ctx.fillStyle='#EFEBE9';
+  ctx.fillStyle='#FFF3E0';
   ctx.beginPath();ctx.ellipse(0,-s*0.35,s*0.28,s*0.3,0,0,Math.PI*2);ctx.fill();
 
   // Front legs (sticking forward, bouncing)
-  ctx.fillStyle='#C4956A';
+  ctx.fillStyle='#E8A87C';
   const frontY=-s*0.15+bounce*0.3;
   ctx.beginPath();ctx.ellipse(-s*0.2,frontY,s*0.15,s*0.2,-0.3,0,Math.PI*2);ctx.fill();
   ctx.beginPath();ctx.ellipse(s*0.2,frontY,s*0.15,s*0.2,0.3,0,Math.PI*2);ctx.fill();
   // Paw pads
-  ctx.fillStyle='#EFEBE9';
+  ctx.fillStyle='#FFCCBC';
   ctx.beginPath();ctx.arc(-s*0.2,frontY+s*0.15,s*0.05,0,Math.PI*2);ctx.fill();
   ctx.beginPath();ctx.arc(s*0.2,frontY+s*0.15,s*0.05,0,Math.PI*2);ctx.fill();
 
   // Head
-  ctx.fillStyle='#C4956A';
+  ctx.fillStyle='#E8A87C';
   ctx.beginPath();ctx.arc(0,-s*1.0,s*0.4,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle='#A67B5B';ctx.lineWidth=1;
+  ctx.strokeStyle='#C97B5D';ctx.lineWidth=1;
   ctx.beginPath();ctx.arc(0,-s*1.0,s*0.4,0,Math.PI*2);ctx.stroke();
 
   // Floppy ears
-  ctx.fillStyle='#A67B5B';
+  ctx.fillStyle='#C97B5D';
   ctx.beginPath();ctx.ellipse(-s*0.35,-s*0.8,s*0.12,s*0.25,-0.3,0,Math.PI*2);ctx.fill();
   ctx.beginPath();ctx.ellipse(s*0.35,-s*0.8,s*0.12,s*0.25,0.3,0,Math.PI*2);ctx.fill();
 
   // Snout
-  ctx.fillStyle='#EFEBE9';
+  ctx.fillStyle='#FFF3E0';
   ctx.beginPath();ctx.ellipse(0,-s*0.85,s*0.2,s*0.12,0,0,Math.PI*2);ctx.fill();
 
   // Nose
@@ -917,7 +951,8 @@ function drawPlusOnes(){
 // ----- Drink Stream -----
 function drawStream(){
   if(!game.isStreaming) return;
-  const startX=bottleCenterX(),startY=bottleCenterY()-H*0.04;
+  const bh=Math.min(W,H)*0.12;
+  const startX=bottleCenterX(),startY=bottleCenterY()-bh*0.65;
   const endX=game.bearX,endY=game.bearY-H*0.35;
   // Bottle tilt animation while feeding
   if(game.feeding) game.bottleAngle=0.15+Math.sin(game.gameTime*0.06)*0.1;
@@ -1282,14 +1317,15 @@ let buildings=[];
 
 function initBuildings(){
   buildings=[];
-  const count=10+Math.floor(W/100);
-  const bw=W/count;
+  const count=8+Math.floor(W/120);
+  const slot=W/count;
   for(let i=0;i<count;i++){
-    const bh=H*(0.07+Math.random()*0.18);
+    const bh=H*(0.06+Math.random()*0.2);
     const colors=['#8D6E63','#5C6BC0','#26A69A','#EF5350','#66BB6A','#FFA726','#AB47BC','#78909C'];
     const roofs=['#6D4C41','#3949AB','#00897B','#C62828','#43A047','#F57C00','#8E24AA','#546E7A'];
+    const gap=slot*0.12;
     buildings.push({
-      x:i*bw,w:bw-2,h:bh,
+      x:i*slot+gap/2,w:slot-gap,h:bh,
       color:colors[i%colors.length],roof:roofs[i%roofs.length],
       doors:1+Math.floor(Math.random()*2),
       winRows:1+Math.floor(Math.random()*2),
@@ -1532,8 +1568,8 @@ function render(){
   drawBoomText();
   drawParticles();
   drawBear();
-  drawBottle();
   drawStream();
+  drawBottle();
   drawPlusOnes();
   drawIntroBubble();
   drawPrompt();
@@ -1578,7 +1614,7 @@ function getClickPos(e){
 
 function isBottleHit(px,py){
   const bx=bottleCenterX(),by=bottleCenterY();
-  const bw=Math.min(W,H)*0.06,bh=Math.min(W,H)*0.12;
+  const bw=Math.min(W,H)*0.07,bh=Math.min(W,H)*0.17;
   return px>=bx-bw&&px<=bx+bw&&py>=by-bh&&py<=by+bh;
 }
 

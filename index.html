@@ -256,7 +256,7 @@ const State={
 let game={
   state:State.START,
   drinkCount:0,
-  maxSafeDrinks:10,
+  maxSafeDrinks:15,
   baseRadius:35,
   bearX:-200,
   bearY:0,
@@ -449,7 +449,7 @@ function drawBear(){
     ctx.save();
     ctx.globalAlpha=0.15+0.1*Math.sin(game.gameTime*0.01);
     ctx.fillStyle='#FF0000';
-    ctx.beginPath();ctx.arc(0,0,game.baseRadius+game.drinkCount*8+20,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(0,0,game.baseRadius+game.drinkCount*28+20,0,Math.PI*2);ctx.fill();
     ctx.restore();
   }
 
@@ -461,7 +461,7 @@ function drawBear(){
   // Fixed structural size (legs, head, arms don't grow)
   const legR=game.baseRadius;
   // Belly expands independently
-  const bellyR=game.baseRadius+game.drinkCount*8;
+      const bellyR=game.baseRadius+game.drinkCount*28;
   const scale=game.bellyScale;
 
   // Walking bob
@@ -577,7 +577,7 @@ function drawBear(){
   ctx.beginPath();ctx.ellipse(0,headR*0.15,headR*0.12,headR*0.08,0,0,Math.PI*2);ctx.fill();
 
   // Mouth
-  if((game.tongueOut||game.drinkCount>7)&&game.state!==State.DRINKING&&game.state!==State.BURST){
+  if((game.tongueOut||game.drinkCount>10)&&game.state!==State.DRINKING&&game.state!==State.BURST){
     ctx.fillStyle='#D32F2F';
     ctx.beginPath();ctx.ellipse(0,headR*0.4,headR*0.15,headR*0.2,0,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#E57373';
@@ -592,7 +592,7 @@ function drawBear(){
     ctx.strokeStyle='#2C1810';ctx.lineWidth=3;
     ctx.beginPath();ctx.moveTo(-headR*0.3,-headR*0.15);ctx.lineTo(-headR*0.1,-headR*0.35);ctx.moveTo(-headR*0.1,-headR*0.15);ctx.lineTo(-headR*0.3,-headR*0.35);ctx.stroke();
     ctx.beginPath();ctx.moveTo(headR*0.1,-headR*0.15);ctx.lineTo(headR*0.3,-headR*0.35);ctx.moveTo(headR*0.3,-headR*0.15);ctx.lineTo(headR*0.1,-headR*0.35);ctx.stroke();
-  }else if(game.drinkCount>7){
+  }else if(game.drinkCount>10){
     ctx.fillStyle='#FFF';
     ctx.beginPath();ctx.ellipse(-headR*0.25,-headR*0.1,headR*0.18,headR*0.2,0,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.ellipse(headR*0.25,-headR*0.1,headR*0.18,headR*0.2,0,0,Math.PI*2);ctx.fill();
@@ -602,7 +602,7 @@ function drawBear(){
     ctx.strokeStyle='#2C1810';ctx.lineWidth=2.5;
     ctx.beginPath();ctx.moveTo(-headR*0.4,-headR*0.35);ctx.lineTo(-headR*0.1,-headR*0.25);ctx.stroke();
     ctx.beginPath();ctx.moveTo(headR*0.4,-headR*0.35);ctx.lineTo(headR*0.1,-headR*0.25);ctx.stroke();
-  }else if(game.drinkCount>4){
+  }else if(game.drinkCount>7){
     ctx.strokeStyle='#2C1810';ctx.lineWidth=2;
     ctx.beginPath();ctx.arc(-headR*0.22,-headR*0.15,headR*0.08,0,Math.PI);ctx.stroke();
     ctx.beginPath();ctx.arc(headR*0.22,-headR*0.15,headR*0.08,0,Math.PI);ctx.stroke();
@@ -619,7 +619,7 @@ function drawBear(){
   ctx.restore(); // global transform
 
   // Sweat drops (during walking to show thirst, and always when tongue out or warning)
-  if(game.state===State.WALKING||game.tongueOut||game.drinkCount>7){
+  if(game.state===State.WALKING||game.tongueOut||game.drinkCount>10){
     for(const d of game.sweatDrops){
       ctx.fillStyle='rgba(100,180,255,0.7)';
       ctx.beginPath();
@@ -726,8 +726,8 @@ function drawDog(){
 
   ctx.restore();
 
-  // Speech bubble when belly >= 50% full
-  if(game.drinkCount>=5){
+  // Speech bubble when belly ~50% full
+  if(game.drinkCount>=8){
     const bubbleY=dy-s*1.8;
     const bubbleTexts=['LOL','ROFL','HAHAHA','LMAO','DEAD'];
     const speed=game.state===State.GAME_OVER?0.05:0.018;
@@ -812,7 +812,7 @@ function drawStopBubble(){
 
 function drawPrompt(){
   if(!game.showPrompt) return;
-  const bx=game.bearX,by=bottleCenterY()-H*0.12;
+  const bx=bottleCenterX(),by=bottleCenterY()-H*0.12;
   ctx.globalAlpha=game.promptAlpha;
   const s=Math.min(W,H)*0.022;
   const text='Click the bottle to force-feed!';
@@ -1006,7 +1006,7 @@ function resetGame(){
   game={
     state:State.START,
     drinkCount:0,
-    maxSafeDrinks:10,
+    maxSafeDrinks:15,
     baseRadius:35,
     bearX:-200,
     bearY:0,
@@ -1093,7 +1093,7 @@ function doDrink(){
   // Burp timer
   game.burpTimer=15;
   // Check warning
-  if(game.drinkCount>7&&game.drinkCount<10){
+  if(game.drinkCount>10&&game.drinkCount<game.maxSafeDrinks){
     game.stopBubble.show=true;
     game.stopBubble.scale=0.01;
     Sound.warning();
@@ -1131,8 +1131,8 @@ function endGame(){
 function update(){
   game.gameTime++;
 
-  // Dog ROFL + laugh starts when belly is 50% full (drinkCount >= 5)
-  const dogActive=game.drinkCount>=5;
+  // Dog ROFL + laugh starts when belly is ~50% full
+  const dogActive=game.drinkCount>=8;
   if(dogActive){
     game.dogRollPhase+=0.035;
     game.dogLaughTimer--;
@@ -1190,9 +1190,9 @@ function update(){
   }
 
   // Sweat drops
-  if(game.state===State.WALKING||game.tongueOut||game.drinkCount>7){
+  if(game.state===State.WALKING||game.tongueOut||game.drinkCount>10){
     if(game.state===State.WALKING ? Math.random()<0.03 : Math.random()<0.05){
-      const bellyR=game.baseRadius+game.drinkCount*8;
+  const bellyR=game.baseRadius+game.drinkCount*28;
       game.sweatDrops.push({
         x:(Math.random()-0.5)*50,
         y:-bellyR*1.2-Math.random()*30,
@@ -1214,7 +1214,7 @@ function update(){
     game.headTilt=-0.2+Math.sin(game.gameTime*0.3)*0.06;
     if(game.drinkAnimTimer<=0){
       // Transition to appropriate state
-      if(game.drinkCount>7){
+      if(game.drinkCount>10){
         game.state=State.WARNING;
       }else{
         game.state=State.THIRSTY;
@@ -1291,7 +1291,7 @@ function update(){
   // Plus ones
   updatePlusOnes();
 
-  // Warning beep every few frames
+  // Warning beep every ~1s
   if(game.state===State.WARNING&&game.gameTime%60===0){
     Sound.warning();
   }

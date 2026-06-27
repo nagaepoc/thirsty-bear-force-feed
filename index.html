@@ -1133,18 +1133,17 @@ let flyingObjects=[];
 
 function initFlyingObjects(){
   flyingObjects=[];
+  // Airplanes & balloons in sky
   const count=6+Math.floor(Math.random()*3);
   for(let i=0;i<count;i++){
     if(i%2===0){
-      // Airplane (40% bigger)
       const sz=(12+Math.random()*14)*1.4;
       flyingObjects.push({
-        type:'plane',x:Math.random()*W,y:H*(0.05+Math.random()*0.2),
+        type:'plane',x:Math.random()*W,y:H*(0.03+Math.random()*0.22),
         speed:0.8+Math.random()*1.5,size:sz,
         body:'#E8E8E8',wing:'#B0B0B0',accent:['#E53935','#1E88E5','#43A047','#FB8C00'][i%4]
       });
     }else{
-      // Hot-air balloon
       const sz=22+Math.random()*22;
       const colors=[['#FF6B6B','#FF8E8E'],['#FFD93D','#FFE066'],['#6BCB77','#8EDB9A'],
                     ['#4D96FF','#7AB8FF'],['#FF6B9D','#FF8DB5'],['#AB47BC','#CE93D8']];
@@ -1155,6 +1154,19 @@ function initFlyingObjects(){
         size:sz,color:c[0],secondary:c[1]
       });
     }
+  }
+  // Cars on the road
+  const carCount=3+Math.floor(Math.random()*2);
+  const carColors=['#D32F2F','#1976D2','#388E3C','#F57C00','#7B1FA2','#616161','#FDD835','#00796B'];
+  for(let i=0;i<carCount;i++){
+    const sz=12+Math.random()*10;
+    flyingObjects.push({
+      type:'car',x:Math.random()*W,
+      y:groundY()+H*(0.01+Math.random()*0.04),
+      speed:0.6+Math.random()*1.8,size:sz,
+      body:carColors[i%carColors.length],
+      roof:['#B71C1C','#0D47A1','#1B5E20','#E65100','#4A148C','#424242','#F9A825','#004D40'][i%carColors.length]
+    });
   }
 }
 
@@ -1207,9 +1219,44 @@ function drawBalloon(o){
   ctx.restore();
 }
 
+function drawCar(o){
+  ctx.save();ctx.translate(o.x,o.y);
+  const s=o.size;
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.beginPath();ctx.ellipse(0,s*0.15,s*0.9,s*0.12,0,0,Math.PI*2);ctx.fill();
+  // Body
+  ctx.fillStyle=o.body;ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;
+  roundRect(ctx,-s*0.8,-s*0.05,s*1.6,s*0.5,s*0.2);ctx.fill();ctx.stroke();
+  // Roof / cabin
+  ctx.fillStyle=o.roof;
+  ctx.beginPath();ctx.moveTo(-s*0.2,-s*0.05);ctx.lineTo(-s*0.3,-s*0.55);ctx.lineTo(s*0.25,-s*0.55);ctx.lineTo(s*0.4,-s*0.05);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.moveTo(-s*0.2,-s*0.05);ctx.lineTo(-s*0.3,-s*0.55);ctx.lineTo(s*0.25,-s*0.55);ctx.lineTo(s*0.4,-s*0.05);ctx.closePath();ctx.stroke();
+  // Windshield
+  ctx.fillStyle='#B3E5FC';ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(-s*0.15,-s*0.08);ctx.lineTo(-s*0.22,-s*0.45);ctx.lineTo(s*0.08,-s*0.45);ctx.lineTo(s*0.2,-s*0.08);ctx.closePath();ctx.fill();ctx.stroke();
+  // Rear window
+  ctx.beginPath();ctx.moveTo(s*0.15,-s*0.08);ctx.lineTo(s*0.12,-s*0.42);ctx.lineTo(s*0.28,-s*0.35);ctx.lineTo(s*0.3,-s*0.08);ctx.closePath();ctx.fill();ctx.stroke();
+  // Wheels
+  ctx.fillStyle='#333';
+  ctx.beginPath();ctx.ellipse(-s*0.45,s*0.45,s*0.18,s*0.14,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(s*0.45,s*0.45,s*0.18,s*0.14,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#666';
+  ctx.beginPath();ctx.arc(-s*0.45,s*0.45,s*0.06,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.45,s*0.45,s*0.06,0,Math.PI*2);ctx.fill();
+  // Headlight (front)
+  ctx.fillStyle='#FFEB3B';
+  ctx.beginPath();ctx.arc(s*0.75,s*0.05,s*0.06,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
 function updateFlyingObjects(){
   for(const o of flyingObjects){
     if(o.type==='plane'){
+      o.x+=o.speed;
+      if(o.x>W+o.size*2) o.x=-o.size*2;
+    }else if(o.type==='car'){
       o.x+=o.speed;
       if(o.x>W+o.size*2) o.x=-o.size*2;
     }else{
@@ -1222,9 +1269,65 @@ function updateFlyingObjects(){
 }
 
 function drawFlyingObjects(){
+  // Draw sky objects first, then cars on top (further down = closer to viewer)
   for(const o of flyingObjects){
     if(o.type==='plane') drawPlane(o);
-    else drawBalloon(o);
+    else if(o.type==='balloon') drawBalloon(o);
+  }
+  for(const o of flyingObjects){
+    if(o.type==='car') drawCar(o);
+  }
+}
+
+// ===================== CITY BUILDINGS ================================
+let buildings=[];
+
+function initBuildings(){
+  buildings=[];
+  const count=10+Math.floor(W/100);
+  const bw=W/count;
+  for(let i=0;i<count;i++){
+    const bh=H*(0.07+Math.random()*0.18);
+    const colors=['#8D6E63','#5C6BC0','#26A69A','#EF5350','#66BB6A','#FFA726','#AB47BC','#78909C'];
+    const roofs=['#6D4C41','#3949AB','#00897B','#C62828','#43A047','#F57C00','#8E24AA','#546E7A'];
+    buildings.push({
+      x:i*bw,w:bw-2,h:bh,
+      color:colors[i%colors.length],roof:roofs[i%roofs.length],
+      doors:1+Math.floor(Math.random()*2),
+      winRows:1+Math.floor(Math.random()*2),
+      winCols:1+Math.floor(Math.random()*2)
+    });
+  }
+}
+
+function drawBuildings(){
+  const bot=groundY()-H*0.02;
+  for(const b of buildings){
+    const top=bot-b.h;
+    // Wall
+    ctx.fillStyle=b.color;
+    ctx.fillRect(b.x,top,b.w,b.h);
+    // Roof line
+    ctx.fillStyle=b.roof;
+    ctx.fillRect(b.x-1,top-3,b.w+2,5);
+    // Windows
+    const ww=b.w*0.18,wh=b.h*0.12,gapX=b.w*0.12,gapY=b.h*0.15;
+    const startY=top+b.h*0.12;
+    for(let r=0;r<b.winRows;r++){
+      for(let c=0;c<b.winCols;c++){
+        const wx=b.x+gapX+c*(ww+gapX);
+        const wy=startY+r*(wh+gapY);
+        if(wx+ww<b.x+b.w-2){
+          ctx.fillStyle='#FFF9C4';ctx.fillRect(wx,wy,ww,wh);
+          ctx.fillStyle='#F9A825';ctx.fillRect(wx+ww*0.1,wy+wh*0.1,ww*0.3,wh*0.3);
+        }
+      }
+    }
+    // Door
+    const dw=b.w*0.22,dh=b.h*0.25;
+    const dx=b.x+(b.w-dw)/2;
+    ctx.fillStyle='#5D4037';ctx.fillRect(dx,bot-dh,dw,dh);
+    ctx.fillStyle='#FFD54F';ctx.beginPath();ctx.arc(dx+dw-4,bot-dh/2,2,0,Math.PI*2);ctx.fill();
   }
 }
 
@@ -1415,6 +1518,7 @@ function render(){
   }
 
   drawBackground();
+  drawBuildings();
   drawFlyingObjects();
   drawDog();
   drawStopBubble();
@@ -1497,6 +1601,7 @@ document.getElementById('restartBtn').addEventListener('click',()=>{
 // Proper resize handler that updates character positions
 function onResize(){
   resize();
+  initBuildings();
   initFlyingObjects();
   if(typeof game !== 'undefined' && game.state!==State.START&&game.state!==State.WALKING){
     game.bearY=bearCenterY();
@@ -1512,6 +1617,7 @@ onResize();
 game.bearY=bearCenterY();
 game.targetX=bearCenterX();
 
+initBuildings();
 initFlyingObjects();
 gameLoop();
 </script>

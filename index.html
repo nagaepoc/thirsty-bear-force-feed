@@ -726,8 +726,8 @@ function drawDog(){
 
   ctx.restore();
 
-  // Speech bubble only mid-game onward
-  if(game.state!==State.START&&game.state!==State.WALKING){
+  // Speech bubble when belly >= 50% full
+  if(game.drinkCount>=5){
     const bubbleY=dy-s*1.8;
     const bubbleTexts=['LOL','ROFL','HAHAHA','LMAO','DEAD'];
     const speed=game.state===State.GAME_OVER?0.05:0.018;
@@ -1131,30 +1131,29 @@ function endGame(){
 function update(){
   game.gameTime++;
 
-  // Dog roll: full ROFL mid-game; still/dormant before that
-  if(game.state!==State.START&&game.state!==State.WALKING){
+  // Dog ROFL + laugh starts when belly is 50% full (drinkCount >= 5)
+  const dogActive=game.drinkCount>=5;
+  if(dogActive){
     game.dogRollPhase+=0.035;
-  }
-
-  // Dog laugh mid-game onward (not during intro walking)
-  if(game.state!==State.START&&game.state!==State.WALKING){
     game.dogLaughTimer--;
     if(game.dogLaughTimer<=0){
       const interval=game.state===State.GAME_OVER?60:120;
       game.dogLaughTimer=interval;
-      Sound.dogLaugh();
     }
-
-    // Dog grows when bear bursts
-    if(game.state===State.BURST||game.state===State.GAME_OVER){
-      game.dogTargetScale=1.8;
-      game.dogShake=8+Math.random()*6;
-    }else{
-      game.dogTargetScale=1;
-      if(game.dogShake>0) game.dogShake*=0.9;
-    }
-    game.dogScale+=(game.dogTargetScale-game.dogScale)*0.05;
+  }else if(game.state!==State.START){
+    // Very subtle idle sway before activation
+    game.dogRollPhase+=0.003;
   }
+
+  // Dog grows when bear bursts (always active regardless of drinkCount)
+  if(game.state===State.BURST||game.state===State.GAME_OVER){
+    game.dogTargetScale=1.8;
+    game.dogShake=8+Math.random()*6;
+  }else{
+    game.dogTargetScale=1;
+    if(game.dogShake>0) game.dogShake*=0.9;
+  }
+  game.dogScale+=(game.dogTargetScale-game.dogScale)*0.05;
 
   // Walking intro
   if(game.state===State.WALKING){
